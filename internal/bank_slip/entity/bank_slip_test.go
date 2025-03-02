@@ -1,6 +1,8 @@
 package bank_slip
 
 import (
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -40,7 +42,58 @@ func TestNewBankSlipFromRow(t *testing.T) {
 	assert.Equal(t, BankSlipStatusPending, bankSlip.Status)
 }
 
-func TestNewBankSlipFromRow_Error(t *testing.T) {
+func TestNewBankSlipFromRow_HeaderAndRowIsDiferent(t *testing.T) {
+	header := "name,governmentId,email,debtAmount,debtDueDate,debtId"
+
+	data := "John Doe,321,john.doe@example.com,1000.50,2023-12-31"
+	fileMetadataId := ""
+
+	bankSlip, err := NewBankSlipFromRow(fileMetadataId, data, header)
+	assert.Error(t, err)
+	assert.Nil(t, bankSlip)
+	assert.Equal(t, errors.New("file metadata must be not empty"), err)
+}
+
+func TestNewBankSlipFromRow_FileMetadataIsEmpty(t *testing.T) {
+	header := "name,governmentId,email,debtAmount,debtDueDate,debtId"
+
+	data := "John Doe,321,john.doe@example.com,1000.50,2023-12-31"
+	fileMetadataId := "file123"
+
+	bankSlip, err := NewBankSlipFromRow(fileMetadataId, data, header)
+	assert.Error(t, err)
+	assert.Nil(t, bankSlip)
+	assert.Equal(t, errors.New("error rowItems and headerItems length are different"), err)
+}
+
+func TestNewBankSlipFromRow_RowIsEmpty(t *testing.T) {
+	header := "name,email,debtAmount,debtDueDate,debtId"
+
+	data := ""
+	fileMetadataId := "file123"
+
+	bankSlip, err := NewBankSlipFromRow(fileMetadataId, data, header)
+	assert.Error(t, err)
+	assert.Nil(t, bankSlip)
+	assert.Equal(t, errors.New("error is missing some field"), err)
+}
+
+func TestNewBankSlipFromRow_SomeFieldNotProvidedError(t *testing.T) {
+	for _, field := range []string{"name", "governmentId", "email", "debtAmount", "debtDueDate", "debtId"} {
+		header := "name,governmentId,email,debtAmount,debtDueDate,debtId"
+		headerWithoutField := strings.Replace(header, field, "missing", -1)
+
+		data := "John Doe,321,john.doe@example.com,1000.50,2023-12-31,debt123"
+		fileMetadataId := "file123"
+
+		bankSlip, err := NewBankSlipFromRow(fileMetadataId, data, headerWithoutField)
+		assert.Error(t, err)
+		assert.Nil(t, bankSlip)
+		assert.Equal(t, errors.New("error is missing some field"), err)
+	}
+}
+
+func TestNewBankSlipFromRow_InvalidGovernmentIdError(t *testing.T) {
 	header := "name,governmentId,email,debtAmount,debtDueDate,debtId"
 	data := "John Doe,abc,john.doe@example.com,1000.50,2023-12-31,debt123"
 	fileMetadataId := "file123"
@@ -48,6 +101,29 @@ func TestNewBankSlipFromRow_Error(t *testing.T) {
 	bankSlip, err := NewBankSlipFromRow(fileMetadataId, data, header)
 	assert.Error(t, err)
 	assert.Nil(t, bankSlip)
+	assert.Equal(t, errors.New("error converting governmentId to int abc Position: 1"), err)
+}
+
+func TestNewBankSlipFromRow_DebitAmountError(t *testing.T) {
+	header := "name,governmentId,email,debtAmount,debtDueDate,debtId"
+	data := "John Doe,123,john.doe@example.com,cde,2023-12-31,debt123"
+	fileMetadataId := "file123"
+
+	bankSlip, err := NewBankSlipFromRow(fileMetadataId, data, header)
+	assert.Error(t, err)
+	assert.Nil(t, bankSlip)
+	assert.Equal(t, errors.New("error converting debtAmount to float64 cde Position: 3"), err)
+}
+
+func TestNewBankSlipFromRow_DebitDueDateError(t *testing.T) {
+	header := "name,governmentId,email,debtAmount,debtDueDate,debtId"
+	data := "John Doe,123,john.doe@example.com,1500.5,2023-12-32,debt123"
+	fileMetadataId := "file123"
+
+	bankSlip, err := NewBankSlipFromRow(fileMetadataId, data, header)
+	assert.Error(t, err)
+	assert.Nil(t, bankSlip)
+	assert.Equal(t, errors.New("error converting debtDueDate to time.Time 2023-12-32 Position: 4"), err)
 }
 
 func TestUpdateRowToError(t *testing.T) {
@@ -55,9 +131,8 @@ func TestUpdateRowToError(t *testing.T) {
 	bankSlip := newBankSlip(123, 1000.50, debtDueDate, "debt123", "John Doe", "john.doe@example.com", "file123", BankSlipStatusPending)
 
 	errorMessage := "Some error occurred"
-	updatedBankSlip, err := bankSlip.UpdateRowToError(errorMessage)
-	assert.NoError(t, err)
+	bankSlip.UpdateRowToError(errorMessage)
 
-	assert.Equal(t, BankSlipStatusError, updatedBankSlip.Status)
-	assert.Equal(t, &errorMessage, updatedBankSlip.ErrorMessage)
+	assert.Equal(t, BankSlipStatusError, bankSlip.Status)
+	assert.Equal(t, &errorMessage, bankSlip.ErrorMessage)
 }

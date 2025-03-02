@@ -62,9 +62,15 @@ func NewBankSlipFromRow(fileMetadataId, data, header string) (*BankSlip, error) 
 	dueDatePosition := slices.IndexFunc(headerItems, func(s string) bool { return strings.Contains(s, "debtDueDate") })
 	debtIdPosition := slices.IndexFunc(headerItems, func(s string) bool { return strings.Contains(s, "debtId") })
 
-	if governmentIdPosition == -1 || len(rowItems) < 6 {
-		fmt.Printf("|%s | %s|", data, header)
-		return nil, errors.New("error getting positions")
+	if len(fileMetadataId) == 0 {
+		return nil, errors.New("file metadata must be not empty")
+	}
+	someVariableIsMissing := governmentIdPosition == -1 || userNamePosition == -1 || emailPosition == -1 || amountPosition == -1 || dueDatePosition == -1 || debtIdPosition == -1
+	if someVariableIsMissing {
+		return nil, errors.New("error is missing some field")
+	}
+	if len(rowItems) != len(headerItems) {
+		return nil, errors.New("error rowItems and headerItems length are different")
 	}
 	governmentId, err := strconv.Atoi(rowItems[governmentIdPosition])
 	if err != nil {
@@ -91,8 +97,7 @@ func NewBankSlipFromRow(fileMetadataId, data, header string) (*BankSlip, error) 
 	), nil
 }
 
-func (bankSlip *BankSlip) UpdateRowToError(errorMessage string) (*BankSlip, error) {
+func (bankSlip *BankSlip) UpdateRowToError(errorMessage string) {
 	bankSlip.ErrorMessage = &errorMessage
 	bankSlip.Status = BankSlipStatusError
-	return bankSlip, nil
 }
