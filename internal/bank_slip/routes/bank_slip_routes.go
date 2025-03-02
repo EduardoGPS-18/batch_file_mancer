@@ -29,8 +29,8 @@ func RegisterRoutes(r *httprouter.Router) {
 		bankSlipFileRepository,
 		multipartFileHandler,
 		kafkaProducer,
-		1024*512,
-		15,
+		1024*64,
+		20,
 	)
 	receiveUploadController := bankSlipControllers.NewReceiveUploadController(receiveUploadService)
 

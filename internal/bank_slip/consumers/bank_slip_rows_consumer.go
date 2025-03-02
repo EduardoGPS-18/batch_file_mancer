@@ -25,7 +25,7 @@ func NewBankSlipRowsConsumer(
 }
 
 func (s *BankSlipRowsConsumer) Execute() {
-	messagesChannel := make(chan map[string]any)
+	messagesChannel := make(chan messaging.Message)
 
 	for range s.processors {
 		go s.processBankSlipRowsService.Execute(messagesChannel)

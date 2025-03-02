@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	bankSlipEntities "performatic-file-processor/internal/bank_slip/entity"
+	"performatic-file-processor/internal/messaging"
 	"strings"
 )
 
@@ -22,9 +23,14 @@ func NewProcessBankSlipRowsService(
 	}
 }
 
-func (s *ProcessBankSlipRowsService) Execute(messagesChannel chan map[string]any) {
+func (s *ProcessBankSlipRowsService) Execute(messagesChannel chan messaging.Message) {
 	for message := range messagesChannel {
-		fileData, fileHeader, fileId := s.getFieldsFromMessage(message)
+		fileData, fileHeader, fileId, err := s.getFieldsFromMessage(message)
+
+		if err != nil {
+			log.Printf("Error getting fields from message: %v\n", err)
+			continue
+		}
 
 		bankSlipList := map[bankSlipEntities.DebitId]*bankSlipEntities.BankSlip{}
 		debitIds := []string{}
@@ -52,7 +58,7 @@ func (s *ProcessBankSlipRowsService) Execute(messagesChannel chan map[string]any
 		}
 
 		for existingDebit := range alreadyExistingDebts {
-			bankSlipList[existingDebit].SetRowWithError("Debt already exists")
+			bankSlipList[existingDebit].UpdateRowToError("Debt already exists")
 		}
 
 		if len(bankSlipList) <= 0 {
@@ -62,17 +68,24 @@ func (s *ProcessBankSlipRowsService) Execute(messagesChannel chan map[string]any
 
 		err = s.bankSlipRepository.InsertMany(bankSlipList)
 		if err != nil {
-			fmt.Printf("Error inserting new debts: %v\n", err)
+			fmt.Printf("Error inserting new debts: %v\n", err.Error())
 			continue
 		}
+
+		message.Commit()
 		log.Printf("Inserted %d new debts\n", inserted)
 	}
 }
-func (s *ProcessBankSlipRowsService) getFieldsFromMessage(message map[string]any) (fileData, fileHeader, fileId string) {
 
-	fileHeader = message["header"].(string)
-	fileData = message["data"].(string)
-	fileId = message["fileId"].(string)
+func (s *ProcessBankSlipRowsService) getFieldsFromMessage(message messaging.Message) (fileData, fileHeader, fileId string, err error) {
+	messageData, err := message.Data()
+	if err != nil {
+		return "", "", "", err
+	}
 
-	return fileData, fileHeader, fileId
+	fileHeader = messageData["header"].(string)
+	fileData = messageData["data"].(string)
+	fileId = messageData["fileId"].(string)
+
+	return fileData, fileHeader, fileId, nil
 }

@@ -2,8 +2,8 @@ package kafka
 
 import (
 	"context"
-	"encoding/json"
 	"log"
+	"performatic-file-processor/internal/messaging"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 )
@@ -57,16 +57,13 @@ func (k *KafkaConsumer) SubscribeInTopic(ctx context.Context, topic string) erro
 	return nil
 }
 
-func (k *KafkaConsumer) Consume(ctx context.Context, topic string) (map[string]any, error) {
+func (k *KafkaConsumer) Consume(ctx context.Context, topic string) (messaging.Message, error) {
 	message, err := k.kafkaConsumer.ReadMessage(-1)
 	if err != nil {
 		panic(err)
 	}
-	jsonData := map[string]any{}
-	err = json.Unmarshal(message.Value, &jsonData)
-	if err != nil {
-		log.Fatalf("Erro ao deserializar mensagem: %v\n", err)
-		return nil, err
-	}
-	return jsonData, nil
+
+	msg := NewKafkaMessage(message, k.kafkaConsumer)
+
+	return msg, nil
 }

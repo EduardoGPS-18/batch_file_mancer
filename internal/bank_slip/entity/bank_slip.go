@@ -91,7 +91,7 @@ func NewBankSlipFromRow(fileMetadataId, data, header string) (*BankSlip, error) 
 	), nil
 }
 
-func (bankSlip *BankSlip) SetRowWithError(errorMessage string) (*BankSlip, error) {
+func (bankSlip *BankSlip) UpdateRowToError(errorMessage string) (*BankSlip, error) {
 	bankSlip.ErrorMessage = &errorMessage
 	bankSlip.Status = BankSlipStatusError
 	return bankSlip, nil
