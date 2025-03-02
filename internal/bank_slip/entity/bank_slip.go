@@ -34,7 +34,7 @@ type BankSlip struct {
 	UserName               string
 	UserEmail              string
 	BankSlipFileMetadataId string
-	ErrorMessage           string
+	ErrorMessage           *string
 	Status                 BankSlipStatus
 }
 
@@ -92,7 +92,7 @@ func NewBankSlipFromRow(fileMetadataId, data, header string) (*BankSlip, error) 
 }
 
 func (bankSlip *BankSlip) SetRowWithError(errorMessage string) (*BankSlip, error) {
-	bankSlip.ErrorMessage = errorMessage
+	bankSlip.ErrorMessage = &errorMessage
 	bankSlip.Status = BankSlipStatusError
 	return bankSlip, nil
 }

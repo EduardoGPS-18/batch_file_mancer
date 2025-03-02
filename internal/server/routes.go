@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	bankSlipRoutes "performatic-file-processor/internal/bank_slip/routes"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -15,8 +16,8 @@ func (s *Server) RegisterRoutes() http.Handler {
 	corsWrapper := s.corsMiddleware(r)
 
 	r.HandlerFunc(http.MethodGet, "/", s.HelloWorldHandler)
-
 	r.HandlerFunc(http.MethodGet, "/health", s.healthHandler)
+	bankSlipRoutes.RegisterRoutes(r)
 
 	return corsWrapper
 }

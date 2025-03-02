@@ -25,5 +25,5 @@ func (controller *ReceiveUploadController) UploadBankSlipFileHandler(w http.Resp
 		return
 	}
 
-	controller.service.Execute(multpartFile, handler.Filename)
+	controller.service.Execute(multpartFile, handler)
 }

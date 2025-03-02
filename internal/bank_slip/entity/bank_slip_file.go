@@ -7,12 +7,12 @@ type BankSlipFileMetadataRepository interface {
 }
 
 type BankSlipFileMetadata struct {
-	ID        int
+	ID        string
 	FileName  string
 	CreatedAt time.Time
 }
 
-func NewBankSlipFile(fileName string) *BankSlipFileMetadata {
+func NewBankSlipFileMetadata(fileName string) *BankSlipFileMetadata {
 	return &BankSlipFileMetadata{
 		FileName: fileName,
 	}

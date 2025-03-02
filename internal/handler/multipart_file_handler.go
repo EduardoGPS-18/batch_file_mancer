@@ -3,7 +3,7 @@ package handler
 import (
 	"fmt"
 	"io"
-	"net/http"
+	"mime/multipart"
 	"os"
 	"strings"
 
@@ -11,7 +11,7 @@ import (
 )
 
 type MultipartFileHandler interface {
-	SaveMultipartFileLocally(req *http.Request) (filePath *string, deleteFile func(), err error)
+	SaveMultipartFileLocally(file multipart.File, fileName string) (filePath *string, deleteFile func(), err error)
 }
 
 type MultipartFileHandlerImpl struct {
@@ -21,13 +21,13 @@ func NewMultipartFileHandler() MultipartFileHandler {
 	return &MultipartFileHandlerImpl{}
 }
 
-func (s *MultipartFileHandlerImpl) SaveMultipartFileLocally(req *http.Request) (filePath *string, deleteFile func(), err error) {
-	file, handler, err := req.FormFile("file")
-	if err != nil {
-		fmt.Println("Error Retrieving the File")
-		fmt.Printf("Error Retrieving the File: %v", err)
-		return nil, nil, err
-	}
+func (s *MultipartFileHandlerImpl) SaveMultipartFileLocally(file multipart.File, fileName string) (filePath *string, deleteFile func(), err error) {
+	// file, handler, err := req.FormFile("file")
+	// if err != nil {
+	// 	fmt.Println("Error Retrieving the File")
+	// 	fmt.Printf("Error Retrieving the File: %v", err)
+	// 	return nil, nil, err
+	// }
 
 	defer file.Close()
 
@@ -38,7 +38,7 @@ func (s *MultipartFileHandlerImpl) SaveMultipartFileLocally(req *http.Request) (
 		return nil, nil, err
 	}
 
-	savedFilePath := "./uploads/" + strings.ReplaceAll(handler.Filename, ".csv", "_"+uuid.NewString()+".csv")
+	savedFilePath := "./uploads/" + strings.ReplaceAll(fileName, ".csv", "_"+uuid.NewString()+".csv")
 	dst, err := os.Create(savedFilePath)
 	if err != nil {
 		fmt.Println(err)

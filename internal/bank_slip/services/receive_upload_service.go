@@ -1,95 +1,141 @@
 package bank_slip
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
+	"io"
+	"log"
 	"mime/multipart"
+	"os"
 	"strings"
+	"sync"
+	"time"
 
-	entities "performatic-file-processor/internal/bank_slip/entity"
-
-	"github.com/confluentinc/confluent-kafka-go/kafka"
+	bankSlipEntities "performatic-file-processor/internal/bank_slip/entity"
+	"performatic-file-processor/internal/handler"
+	"performatic-file-processor/internal/messaging"
 )
 
-type ReceiveUploadService struct {
-	bankSlipRepository             entities.BankSlipRepository
-	bankSlipFileMetadataRepository entities.BankSlipFileMetadataRepository
+type Row struct {
+	data   []byte
+	header string
 }
 
-func NewReceiveUploadService(bankSlipRepo entities.BankSlipRepository, bankSlipFileRepo entities.BankSlipFileMetadataRepository) *ReceiveUploadService {
+type ReceiveUploadService struct {
+	bankSlipRepository             bankSlipEntities.BankSlipRepository
+	bankSlipFileMetadataRepository bankSlipEntities.BankSlipFileMetadataRepository
+	multipartFileHandler           handler.MultipartFileHandler
+	messageProducer                messaging.MessageProducer
+	workers                        int
+	bufferSize                     int
+}
+
+func NewReceiveUploadService(
+	bankSlipRepo bankSlipEntities.BankSlipRepository,
+	bankSlipFileRepo bankSlipEntities.BankSlipFileMetadataRepository,
+	multipartFileHandler handler.MultipartFileHandler,
+	messageProducer messaging.MessageProducer,
+	bufferSize int,
+	workers int,
+) *ReceiveUploadService {
 	return &ReceiveUploadService{
 		bankSlipRepository:             bankSlipRepo,
 		bankSlipFileMetadataRepository: bankSlipFileRepo,
+		multipartFileHandler:           multipartFileHandler,
+		messageProducer:                messageProducer,
+		workers:                        workers,
+		bufferSize:                     bufferSize,
 	}
 }
 
-func (s *ReceiveUploadService) Execute(file multipart.File, fileName string) {
-	messagesChannel := make(chan *kafka.Message)
+func (s *ReceiveUploadService) Execute(file multipart.File, fileHeader *multipart.FileHeader) error {
+	start := time.Now()
 
-	go func() {
-		for message := range messagesChannel {
-			fileData, fileHeader, fileId, error := s.getFieldsFromMessage(message)
-			if error != nil || fileData == "" {
-				switch {
-				case error != nil:
-					fmt.Printf("Error: data or header is empty\n")
-				case fileData == "":
-					fmt.Printf("Error getting file fields: %v\n", error)
-				}
-				continue
-			}
+	bankSlipFile := bankSlipEntities.NewBankSlipFileMetadata(fileHeader.Filename)
 
-			bankSlipList := map[entities.DebitId]*entities.BankSlip{}
-			debitIds := []string{}
-
-			for row := range strings.SplitSeq(fileData, "\n") {
-				if row == "" {
-					continue
-				}
-
-				bankSlip, err := entities.NewBankSlipFromRow(fileId, row, fileHeader)
-				if err != nil {
-					fmt.Printf("Error creating Bank Slip Data: %v\n", err)
-					continue
-				}
-				bankSlipList[bankSlip.DebtId] = bankSlip
-				debitIds = append(debitIds, fmt.Sprintf("'%s'", bankSlip.DebtId))
-			}
-
-			alreadyExistingDebts, err := s.bankSlipRepository.GetExistingByDebitIds(debitIds)
-			if err != nil {
-				fmt.Printf("Error getting existing debts: %v\n", err)
-				continue
-			}
-
-			for existingDebit := range alreadyExistingDebts {
-				bankSlipList[existingDebit].SetRowWithError("Debt already exists")
-			}
-
-			if len(alreadyExistingDebts) <= 0 {
-				fmt.Print("No new debts to insert\n")
-				continue
-			}
-
-			err = s.bankSlipRepository.InsertMany(bankSlipList)
-			if err != nil {
-				fmt.Printf("Error inserting new debts: %v\n", err)
-				continue
-			}
-		}
-	}()
-}
-
-func (s *ReceiveUploadService) getFieldsFromMessage(message *kafka.Message) (fileData, fileHeader, fileId string, err error) {
-	jsonData := map[string]string{}
-	err = json.Unmarshal(message.Value, &jsonData)
+	err := s.bankSlipFileMetadataRepository.Insert(bankSlipFile)
 	if err != nil {
-		fmt.Printf("Error Unmarshalling Message: %v\n", err)
-		return "", "", "", err
+		return err
 	}
-	fileHeader = jsonData["header"]
-	fileData = jsonData["data"]
-	fileId = jsonData["fileId"]
 
-	return fileData, fileHeader, fileId, nil
+	filePath, deleteFile, err := s.multipartFileHandler.SaveMultipartFileLocally(file, fileHeader.Filename)
+	if err != nil {
+		return err
+	}
+	defer deleteFile()
+
+	buffer := make([]byte, s.bufferSize)
+	fileChannel := make(chan Row, s.workers)
+
+	var wg sync.WaitGroup
+	wg.Add(s.workers)
+
+	for i := range s.workers {
+		go s.processFile(i, fileChannel, bankSlipFile.ID, &wg)
+	}
+
+	locallyFile, err := os.Open(*filePath)
+	if err != nil {
+		fmt.Printf("Error Opening the File: %v", err)
+		return err
+	}
+	defer locallyFile.Close()
+
+	isFirstItem := true
+	var remainder string
+	var header string
+	for {
+		bytesRead, err := locallyFile.Read(buffer)
+		if err != nil {
+			if err != io.EOF {
+				log.Printf("Error Reading the File: %v", err)
+			}
+			break
+		}
+
+		str := string(buffer[:bytesRead])
+
+		lastItemIndex := strings.LastIndex(str, "\n")
+		if lastItemIndex == -1 {
+			lastItemIndex = len(str)
+		}
+		if !isFirstItem {
+			fullRowsValid := remainder + str[:lastItemIndex]
+			fileChannel <- Row{data: []byte(fullRowsValid), header: header}
+		} else {
+			isFirstItem = false
+			firstItem := strings.Index(str, "\n")
+			header = str[:firstItem]
+			rowsWithoutHeader := str[firstItem+1 : lastItemIndex]
+			fileChannel <- Row{data: []byte(rowsWithoutHeader), header: header}
+		}
+		remainder = str[lastItemIndex:]
+	}
+	close(fileChannel)
+
+	wg.Wait()
+
+	elapsed := time.Since(start)
+	fmt.Printf("Time taken: %s\n", elapsed)
+	return nil
+}
+
+func (f *ReceiveUploadService) processFile(worker int, fileChannel chan Row, fileId string, wg *sync.WaitGroup) {
+	for {
+		row, ok := <-fileChannel
+		if len(row.data) == 0 || !ok {
+			fmt.Printf("Worker %d finished processing\n", worker)
+			break
+		}
+
+		message := map[string]any{"data": string(row.data), "header": row.header, "fileId": fileId}
+
+		err := f.messageProducer.Publish(context.TODO(), "rows-to-process", message)
+		if err != nil {
+			fmt.Print("Error posting message", err)
+			break
+		}
+	}
+
+	wg.Done()
 }

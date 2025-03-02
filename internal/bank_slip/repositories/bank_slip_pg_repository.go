@@ -1,4 +1,4 @@
-package repositories
+package bank_slip
 
 import (
 	"database/sql"
@@ -23,7 +23,7 @@ func (r *BankSlipPgRepository) InsertMany(bankSlips map[entities.DebitId]*entiti
 	i := 0
 	for _, slip := range bankSlips {
 		fields = append(fields, slip.UserName, slip.GovernmentId, slip.UserEmail, slip.DebtAmount, slip.DebtDueDate, slip.DebtId, slip.BankSlipFileMetadataId, slip.Status, slip.ErrorMessage)
-		queryValues := fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)", i*9+1, i*9+2, i*9+3, i*9+4, i*9+5, i*9+6, i*9+7, i*9+8, i*9+9)
+		queryValues += fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)", i*9+1, i*9+2, i*9+3, i*9+4, i*9+5, i*9+6, i*9+7, i*9+8, i*9+9)
 		if i < len(bankSlips)-1 {
 			queryValues += ", "
 		}

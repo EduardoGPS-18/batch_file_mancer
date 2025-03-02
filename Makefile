@@ -7,11 +7,18 @@ build:
 	@echo "Building..."
 	
 	
-	@go build -o main cmd/api/main.go
+	@go build -o ./build/main cmd/api/main.go
+	@go build -o ./build/workers cmd/workers/main.go
 
 # Run the application
-run:
+run-api:
+	@echo "Running API..."
 	@go run cmd/api/main.go
+
+run-workers:
+	@echo "Running Workers..."
+	@go run cmd/workers/main.go
+	
 # Create DB container
 docker-run:
 	@if docker compose up --build 2>/dev/null; then \
@@ -33,7 +40,7 @@ docker-down:
 # Test the application
 test:
 	@echo "Testing..."
-	@go test ./... -v
+	@go test ./cmd/... ./internal/... -v
 # Integrations Tests for the application
 itest:
 	@echo "Running integration tests..."

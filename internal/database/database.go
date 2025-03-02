@@ -55,8 +55,7 @@ func New() Service {
 }
 
 func GetInstance() *sql.DB {
-	New()
-	return dbInstance.db
+	return New().(*service).db
 }
 
 // Health checks the health of the database connection by pinging the database.
