@@ -32,10 +32,9 @@ func (s *ProcessBankSlipRowsService) Execute(messagesChannel chan messaging.Mess
 			continue
 		}
 
-		bankSlipList := map[bankSlipEntities.DebitId]*bankSlipEntities.BankSlip{}
+		bankSlips := map[bankSlipEntities.DebitId]*bankSlipEntities.BankSlip{}
 		debitIds := []string{}
 
-		inserted := 0
 		for row := range strings.SplitSeq(fileData, "\n") {
 			if row == "" {
 				continue
@@ -46,9 +45,8 @@ func (s *ProcessBankSlipRowsService) Execute(messagesChannel chan messaging.Mess
 				fmt.Printf("Error creating Bank Slip Data: %v\n", err)
 				continue
 			}
-			bankSlipList[bankSlip.DebtId] = bankSlip
+			bankSlips[bankSlip.DebtId] = bankSlip
 			debitIds = append(debitIds, fmt.Sprintf("'%s'", bankSlip.DebtId))
-			inserted++
 		}
 
 		alreadyExistingDebts, err := s.bankSlipRepository.GetExistingByDebitIds(debitIds)
@@ -58,22 +56,22 @@ func (s *ProcessBankSlipRowsService) Execute(messagesChannel chan messaging.Mess
 		}
 
 		for existingDebit := range alreadyExistingDebts {
-			bankSlipList[existingDebit].UpdateRowToError("Debt already exists")
+			bankSlips[existingDebit].UpdateRowToError("Debt already exists")
 		}
 
-		if len(bankSlipList) <= 0 {
+		if len(bankSlips) <= 0 {
 			fmt.Print("No new debts to insert\n")
 			continue
 		}
 
-		err = s.bankSlipRepository.InsertMany(bankSlipList)
+		err = s.bankSlipRepository.InsertMany(bankSlips)
 		if err != nil {
 			fmt.Printf("Error inserting new debts: %v\n", err.Error())
 			continue
 		}
 
 		message.Commit()
-		log.Printf("Inserted %d new debts\n", inserted)
+		log.Printf("Inserted %d new debts\n", len(bankSlips))
 	}
 }
 
