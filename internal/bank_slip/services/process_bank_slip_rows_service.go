@@ -1,6 +1,7 @@
 package bank_slip
 
 import (
+	"context"
 	"fmt"
 	"log"
 	bankSlipEntities "performatic-file-processor/internal/bank_slip/entity"
@@ -23,55 +24,63 @@ func NewProcessBankSlipRowsService(
 	}
 }
 
-func (s *ProcessBankSlipRowsService) Execute(messagesChannel chan messaging.Message) {
-	for message := range messagesChannel {
-		fileData, fileHeader, fileId, err := s.getFieldsFromMessage(message)
+func (s *ProcessBankSlipRowsService) Execute(context context.Context, messagesChannel chan messaging.Message) {
+	select {
+	case <-context.Done():
+		log.Printf("Exiting ProcessBankSlipRowsService\n")
+		return
 
-		if err != nil {
-			log.Printf("Error getting fields from message: %v\n", err)
-			continue
-		}
+	default:
+		for message := range messagesChannel {
 
-		bankSlips := map[bankSlipEntities.DebitId]*bankSlipEntities.BankSlip{}
-		debitIds := []string{}
+			fileData, fileHeader, fileId, err := s.getFieldsFromMessage(message)
 
-		for row := range strings.SplitSeq(fileData, "\n") {
-			if row == "" {
-				continue
-			}
-
-			bankSlip, err := bankSlipEntities.NewBankSlipFromRow(fileId, row, fileHeader)
 			if err != nil {
-				fmt.Printf("Error creating Bank Slip Data: %v\n", err)
+				log.Printf("Error getting fields from message: %v\n", err)
 				continue
 			}
-			bankSlips[bankSlip.DebtId] = bankSlip
-			debitIds = append(debitIds, fmt.Sprintf("'%s'", bankSlip.DebtId))
-		}
 
-		alreadyExistingDebts, err := s.bankSlipRepository.GetExistingByDebitIds(debitIds)
-		if err != nil {
-			fmt.Printf("Error getting existing debts: %v\n", err)
-			continue
-		}
+			bankSlips := map[bankSlipEntities.DebitId]*bankSlipEntities.BankSlip{}
+			debitIds := []string{}
 
-		for existingDebit := range alreadyExistingDebts {
-			bankSlips[existingDebit].UpdateRowToError("Debt already exists")
-		}
+			for row := range strings.SplitSeq(fileData, "\n") {
+				if row == "" {
+					continue
+				}
 
-		if len(bankSlips) <= 0 {
-			fmt.Print("No new debts to insert\n")
-			continue
-		}
+				bankSlip, err := bankSlipEntities.NewBankSlipFromRow(fileId, row, fileHeader)
+				if err != nil {
+					fmt.Printf("Error creating Bank Slip Data: %v\n", err)
+					continue
+				}
+				bankSlips[bankSlip.DebtId] = bankSlip
+				debitIds = append(debitIds, fmt.Sprintf("'%s'", bankSlip.DebtId))
+			}
 
-		err = s.bankSlipRepository.InsertMany(bankSlips)
-		if err != nil {
-			fmt.Printf("Error inserting new debts: %v\n", err.Error())
-			continue
-		}
+			alreadyExistingDebts, err := s.bankSlipRepository.GetExistingByDebitIds(debitIds)
+			if err != nil {
+				fmt.Printf("Error getting existing debts: %v\n", err)
+				continue
+			}
 
-		message.Commit()
-		log.Printf("Inserted %d new debts\n", len(bankSlips))
+			if len(bankSlips) <= 0 {
+				fmt.Print("No new debts to insert\n")
+				continue
+			}
+
+			for existingDebit := range alreadyExistingDebts {
+				bankSlips[existingDebit].UpdateRowToError("Debt already exists")
+			}
+
+			err = s.bankSlipRepository.InsertMany(bankSlips)
+			if err != nil {
+				fmt.Printf("Error inserting new debts: %v\n", err.Error())
+				continue
+			}
+
+			message.Commit()
+			log.Printf("Inserted %d new debts\n", len(bankSlips))
+		}
 	}
 }
 

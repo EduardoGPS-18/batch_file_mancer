@@ -28,7 +28,7 @@ func (s *BankSlipRowsConsumer) Execute() {
 	messagesChannel := make(chan messaging.Message)
 
 	for range s.processors {
-		go s.processBankSlipRowsService.Execute(messagesChannel)
+		go s.processBankSlipRowsService.Execute(context.Background(), messagesChannel)
 	}
 
 	s.messageConsumer.SubscribeInTopic(context.TODO(), "rows-to-process")
