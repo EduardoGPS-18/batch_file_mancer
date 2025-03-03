@@ -5,6 +5,7 @@ import (
 	bankSlipEntities "performatic-file-processor/internal/bank_slip/entity"
 	bankSlipMocks "performatic-file-processor/internal/bank_slip/mocks"
 	"performatic-file-processor/internal/messaging"
+	sharedMocks "performatic-file-processor/internal/mocks"
 	"sync"
 	"testing"
 	"time"
@@ -36,7 +37,7 @@ func TestRunSuite(t *testing.T) {
 
 func (s *TestSuit) TestProcessBankSlipRowsService_ShouldDoNothingWhenFailToConvertMessageData() {
 	messagesChannel := make(chan messaging.Message, 1)
-	message := bankSlipMocks.NewKafkaMessageMock()
+	message := sharedMocks.NewKafkaMessageMock()
 	messagesChannel <- message
 
 	message.On("Data").Return(nil, assert.AnError).Once()
@@ -57,7 +58,7 @@ func (s *TestSuit) TestProcessBankSlipRowsService_ShouldDoNothingWhenFailToConve
 }
 
 func (s *TestSuit) TestProcessBankSlipRowsService_ShouldDoNothingWhenFailCreatingBankSlipEntity() {
-	message := bankSlipMocks.NewKafkaMessageMock()
+	message := sharedMocks.NewKafkaMessageMock()
 
 	messageWithHeaderAndDataWithDiferentLength := map[string]any{
 		"header": "name,governmentId,email,debtAmount,debtDueDate,debtId",
@@ -92,7 +93,7 @@ func (s *TestSuit) TestProcessBankSlipRowsService_ShouldDoNothingWhenFailCreatin
 }
 
 func (s *TestSuit) TestProcessBankSlipRowsService_ShouldDoNothingWhenFailGettingExistingDebits() {
-	message := bankSlipMocks.NewKafkaMessageMock()
+	message := sharedMocks.NewKafkaMessageMock()
 
 	messageWithHeaderAndDataWithDiferentLength := map[string]any{
 		"header": "name,governmentId,email,debtAmount,debtDueDate,debtId",
@@ -126,7 +127,7 @@ func (s *TestSuit) TestProcessBankSlipRowsService_ShouldDoNothingWhenFailGetting
 }
 
 func (s *TestSuit) TestProcessBankSlipRowsService_ShouldDoNothingIfTheresNtDebitToInsert() {
-	message := bankSlipMocks.NewKafkaMessageMock()
+	message := sharedMocks.NewKafkaMessageMock()
 
 	messageWithHeaderAndDataWithDiferentLength := map[string]any{
 		"header": "name,governmentId,email,debtAmount,debtDueDate,debtId",
@@ -162,7 +163,7 @@ func (s *TestSuit) TestProcessBankSlipRowsService_ShouldDoNothingIfTheresNtDebit
 }
 
 func (s *TestSuit) TestProcessBankSlipRowsService_ShouldSaveWithErrorIfDebitAlreadyExists() {
-	message := bankSlipMocks.NewKafkaMessageMock()
+	message := sharedMocks.NewKafkaMessageMock()
 
 	messageWithHeaderAndDataWithDiferentLength := map[string]any{
 		"header": "name,governmentId,email,debtAmount,debtDueDate,debtId",
@@ -221,7 +222,7 @@ func (s *TestSuit) TestProcessBankSlipRowsService_ShouldSaveWithErrorIfDebitAlre
 }
 
 func (s *TestSuit) TestProcessBankSlipRowsService_ShouldNotCommitMessageWhenInsertFails() {
-	message := bankSlipMocks.NewKafkaMessageMock()
+	message := sharedMocks.NewKafkaMessageMock()
 
 	message.On("Data").Return(map[string]any{
 		"header": "name,governmentId,email,debtAmount,debtDueDate,debtId",
@@ -271,7 +272,7 @@ func (s *TestSuit) TestProcessBankSlipRowsService_ShouldNotCommitMessageWhenInse
 }
 
 func (s *TestSuit) TestProcessBankSlipRowsService_ShouldProcessSuccessfullyBankSlipRows() {
-	message := bankSlipMocks.NewKafkaMessageMock()
+	message := sharedMocks.NewKafkaMessageMock()
 
 	message.On("Data").Return(map[string]any{
 		"header": "name,governmentId,email,debtAmount,debtDueDate,debtId",
@@ -321,8 +322,59 @@ func (s *TestSuit) TestProcessBankSlipRowsService_ShouldProcessSuccessfullyBankS
 	message.AssertCalled(s.T(), "Commit")
 }
 
+func (s *TestSuit) TestProcessBankSlipRowsService_ShouldProcessSuccessfullyWhenFirstReceivedLineIsBanlkBankSlipRows() {
+	message := sharedMocks.NewKafkaMessageMock()
+
+	message.On("Data").Return(map[string]any{
+		"header": "name,governmentId,email,debtAmount,debtDueDate,debtId",
+		"data":   "\nJohn Doe,123,john.doe@example.com,1000.50,2023-12-31,debt123",
+		"fileId": "fileId",
+	}, nil).Once()
+	message.On("Commit")
+
+	mockedData := map[bankSlipEntities.DebitId]bankSlipEntities.Existing{}
+	s.mockBankSlipRepository.On("GetExistingByDebitIds", mock.Anything).Return(mockedData, nil).Once()
+	s.mockBankSlipRepository.On("InsertMany", mock.Anything).Return(nil).Once()
+
+	messagesChannel := make(chan messaging.Message, 1)
+	messagesChannel <- message
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s.service.Execute(context.Background(), messagesChannel)
+	}()
+	close(messagesChannel)
+	wg.Wait()
+
+	s.mockBankSlipRepository.AssertCalled(s.T(), "GetExistingByDebitIds", mock.MatchedBy(func(ids []string) bool {
+		expected := []string{"'debt123'"}
+		return assert.ElementsMatch(s.T(), expected, ids)
+	}))
+
+	expected := &bankSlipEntities.BankSlip{
+		ID:                     0,
+		UserName:               "John Doe",
+		GovernmentId:           123,
+		UserEmail:              "john.doe@example.com",
+		BankSlipFileMetadataId: "fileId",
+		ErrorMessage:           nil,
+		Status:                 bankSlipEntities.BankSlipStatusPending,
+		DebtAmount:             1000.50,
+		DebtDueDate:            time.Date(2023, 12, 31, 0, 0, 0, 0, time.UTC),
+		DebtId:                 "debt123",
+	}
+
+	s.mockBankSlipRepository.AssertCalled(s.T(), "InsertMany", mock.MatchedBy(func(m map[bankSlipEntities.DebitId]*bankSlipEntities.BankSlip) bool {
+		actual, exists := m["debt123"]
+		return exists && assert.Equal(s.T(), expected, actual)
+	}))
+	message.AssertCalled(s.T(), "Commit")
+}
+
 func (s *TestSuit) TestProcessBankSlipRowsService_ShouldProcessOnlyValidMessagesWhenManyRowIsProvided() {
-	message := bankSlipMocks.NewKafkaMessageMock()
+	message := sharedMocks.NewKafkaMessageMock()
 
 	message.On("Data").Return(map[string]any{
 		"header": "name,governmentId,email,debtAmount,debtDueDate,debtId",

@@ -2,11 +2,11 @@ package bank_slip
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"mime/multipart"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -24,7 +24,7 @@ type Row struct {
 type ReceiveUploadService struct {
 	bankSlipRepository             bankSlipEntities.BankSlipRepository
 	bankSlipFileMetadataRepository bankSlipEntities.BankSlipFileMetadataRepository
-	multipartFileHandler           handler.MultipartFileHandler
+	fileHandler                    handler.FileHandler
 	messageProducer                messaging.MessageProducer
 	workers                        int
 	bufferSize                     int
@@ -33,7 +33,7 @@ type ReceiveUploadService struct {
 func NewReceiveUploadService(
 	bankSlipRepo bankSlipEntities.BankSlipRepository,
 	bankSlipFileRepo bankSlipEntities.BankSlipFileMetadataRepository,
-	multipartFileHandler handler.MultipartFileHandler,
+	multipartFileHandler handler.FileHandler,
 	messageProducer messaging.MessageProducer,
 	bufferSize int,
 	workers int,
@@ -41,7 +41,7 @@ func NewReceiveUploadService(
 	return &ReceiveUploadService{
 		bankSlipRepository:             bankSlipRepo,
 		bankSlipFileMetadataRepository: bankSlipFileRepo,
-		multipartFileHandler:           multipartFileHandler,
+		fileHandler:                    multipartFileHandler,
 		messageProducer:                messageProducer,
 		workers:                        workers,
 		bufferSize:                     bufferSize,
@@ -58,11 +58,11 @@ func (s *ReceiveUploadService) Execute(file multipart.File, fileHeader *multipar
 		return err
 	}
 
-	filePath, deleteFile, err := s.multipartFileHandler.SaveMultipartFileLocally(file, fileHeader.Filename)
+	savedFile, err := s.fileHandler.SaveFile(handler.NewMultipartFile(file, fileHeader))
 	if err != nil {
 		return err
 	}
-	defer deleteFile()
+	defer savedFile.Delete()
 
 	buffer := make([]byte, s.bufferSize)
 	fileChannel := make(chan Row, s.workers)
@@ -74,43 +74,19 @@ func (s *ReceiveUploadService) Execute(file multipart.File, fileHeader *multipar
 		go s.processFile(i, fileChannel, bankSlipFile.ID, &wg)
 	}
 
-	locallyFile, err := os.Open(*filePath)
-	if err != nil {
-		fmt.Printf("Error Opening the File: %v", err)
-		return err
+	locallyFile := savedFile.Open()
+
+	header, remainder := s.readFileHeader(locallyFile, buffer)
+
+	if header == "" {
+		close(fileChannel)
+		elapsed := time.Since(start)
+		fmt.Printf("Time taken: %s\n", elapsed)
+		return errors.New("header not found")
 	}
-	defer locallyFile.Close()
 
-	isFirstItem := true
-	var remainder string
-	var header string
-	for {
-		bytesRead, err := locallyFile.Read(buffer)
-		if err != nil {
-			if err != io.EOF {
-				log.Printf("Error Reading the File: %v", err)
-			}
-			break
-		}
+	s.readFileContent(locallyFile, buffer, remainder, fileChannel, header)
 
-		str := string(buffer[:bytesRead])
-
-		lastItemIndex := strings.LastIndex(str, "\n")
-		if lastItemIndex == -1 {
-			lastItemIndex = len(str)
-		}
-		if !isFirstItem {
-			fullRowsValid := remainder + str[:lastItemIndex]
-			fileChannel <- Row{data: []byte(fullRowsValid), header: header}
-		} else {
-			isFirstItem = false
-			firstItem := strings.Index(str, "\n")
-			header = str[:firstItem]
-			rowsWithoutHeader := str[firstItem+1 : lastItemIndex]
-			fileChannel <- Row{data: []byte(rowsWithoutHeader), header: header}
-		}
-		remainder = str[lastItemIndex:]
-	}
 	close(fileChannel)
 
 	wg.Wait()
@@ -120,11 +96,69 @@ func (s *ReceiveUploadService) Execute(file multipart.File, fileHeader *multipar
 	return nil
 }
 
+func (*ReceiveUploadService) readFileContent(locallyFile io.Reader, buffer []byte, headerRemaining string, fileChannel chan Row, header string) {
+	remainder := headerRemaining
+	for {
+		bytesRead, err := locallyFile.Read(buffer)
+		if bytesRead == 0 {
+			break
+		}
+		if err != nil {
+			log.Printf("Error Reading the File: %v", err)
+			break
+		}
+
+		str := string(buffer)
+
+		lastItemIndex := strings.LastIndex(str, "\n")
+		lastRemainingIndex := strings.LastIndex(remainder, "\n")
+		if lastItemIndex == -1 && lastRemainingIndex == -1 {
+			remainder = remainder + str
+			continue
+		}
+
+		fullRowsValid := remainder + str[:lastItemIndex]
+		if lastItemIndex == 0 {
+			fullRowsValid = remainder + str
+		}
+		fileChannel <- Row{data: []byte(fullRowsValid), header: header}
+		remainder = str[lastItemIndex+1:]
+	}
+}
+
+func (*ReceiveUploadService) readFileHeader(locallyFile io.Reader, buffer []byte) (string, string) {
+	var header string
+	var remainder string
+	for {
+		bytesRead, err := locallyFile.Read(buffer)
+		if bytesRead == 0 {
+			break
+		}
+		if err != nil {
+			log.Printf("Error Reading the File: %v", err)
+			break
+		}
+		str := string(buffer)
+
+		finalHeaderIdx := strings.Index(str, "\n")
+		if finalHeaderIdx == -1 {
+			header += str
+			continue
+		}
+		header += str[:finalHeaderIdx]
+		if finalHeaderIdx != -1 {
+			remainder = str[finalHeaderIdx+1:]
+			break
+		}
+	}
+	return header, remainder
+}
+
 func (f *ReceiveUploadService) processFile(worker int, fileChannel chan Row, fileId string, wg *sync.WaitGroup) {
 	for {
 		row, ok := <-fileChannel
-		if len(row.data) == 0 || !ok {
-			fmt.Printf("Worker %d finished processing\n", worker)
+		if len(row.data) == 0 && !ok {
+			log.Printf("Worker %d finished processing\n", worker)
 			break
 		}
 
@@ -132,8 +166,8 @@ func (f *ReceiveUploadService) processFile(worker int, fileChannel chan Row, fil
 
 		err := f.messageProducer.Publish(context.TODO(), "rows-to-process", message)
 		if err != nil {
-			fmt.Print("Error posting message", err)
-			break
+			log.Print("Error posting message", err)
+			continue
 		}
 	}
 

@@ -1,6 +1,8 @@
-package bank_slip
+package mocks
 
 import (
+	"context"
+
 	"github.com/stretchr/testify/mock"
 )
 
@@ -27,4 +29,14 @@ func (m *KafkaMessageMock) Data() (map[string]any, error) {
 
 func (m *KafkaMessageMock) Commit() {
 	m.Called()
+}
+
+type MessageProducerMock struct {
+	mock.Mock
+}
+
+func (m *MessageProducerMock) Publish(ctx context.Context, topic string, messageData map[string]any) error {
+	args := m.Called(ctx, topic, messageData)
+
+	return args.Error(0)
 }

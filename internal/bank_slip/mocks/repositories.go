@@ -12,6 +12,9 @@ type BankSlipFileMetadataRepositoryMock struct {
 
 func (m *BankSlipFileMetadataRepositoryMock) Insert(bankSlipFile *entities.BankSlipFileMetadata) error {
 	args := m.Called(bankSlipFile)
+	if args.Get(0) == nil {
+		return nil
+	}
 	return args.Error(0)
 }
 

@@ -3,64 +3,51 @@ package handler
 import (
 	"fmt"
 	"io"
-	"mime/multipart"
 	"os"
 	"strings"
 
 	"github.com/google/uuid"
 )
 
-type MultipartFileHandler interface {
-	SaveMultipartFileLocally(file multipart.File, fileName string) (filePath *string, deleteFile func(), err error)
-}
-
 type MultipartFileHandlerImpl struct {
 }
 
-func NewMultipartFileHandler() MultipartFileHandler {
+func NewMultipartFileHandler() FileHandler {
 	return &MultipartFileHandlerImpl{}
 }
 
-func (s *MultipartFileHandlerImpl) SaveMultipartFileLocally(file multipart.File, fileName string) (filePath *string, deleteFile func(), err error) {
-	// file, handler, err := req.FormFile("file")
-	// if err != nil {
-	// 	fmt.Println("Error Retrieving the File")
-	// 	fmt.Printf("Error Retrieving the File: %v", err)
-	// 	return nil, nil, err
-	// }
-
+func (s *MultipartFileHandlerImpl) SaveFile(file File) (savedFile SavedFile, err error) {
 	defer file.Close()
 
 	err = os.MkdirAll("./uploads", os.ModePerm)
 	if err != nil {
 		fmt.Println(err)
 		fmt.Printf("Error Retrieving the File: %v", err)
-		return nil, nil, err
+		return nil, err
 	}
 
-	savedFilePath := "./uploads/" + strings.ReplaceAll(fileName, ".csv", "_"+uuid.NewString()+".csv")
+	savedFilePath := "./uploads/" + strings.ReplaceAll(file.FileName(), ".csv", "_"+uuid.NewString()+".csv")
 	dst, err := os.Create(savedFilePath)
 	if err != nil {
 		fmt.Println(err)
 		fmt.Printf("Error Retrieving the File: %v", err)
-		return nil, nil, err
+		return nil, err
 	}
 	defer dst.Close()
 
-	_, err = io.Copy(dst, file)
+	_, err = io.Copy(dst, file.Reader())
 	if err != nil {
 		fmt.Println(err)
 		fmt.Printf("Error Retrieving the File: %v", err)
-		return nil, nil, err
+		return nil, err
 	}
 
-	deleteFile = func() {
-		err := os.Remove(savedFilePath)
-		if err != nil {
-			fmt.Println(err)
-			fmt.Printf("Error Retrieving the File: %v", err)
-		}
+	savedOsFile, err := os.Open(savedFilePath)
+	if err != nil {
+		fmt.Println(err)
+		fmt.Printf("Error Retrieving the File: %v", err)
+		return nil, err
 	}
 
-	return &savedFilePath, deleteFile, nil
+	return NewOsFile(savedOsFile), nil
 }
