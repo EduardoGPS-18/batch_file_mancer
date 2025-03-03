@@ -16,6 +16,10 @@ import (
 	"performatic-file-processor/internal/messaging"
 )
 
+type ReceiveUploadServiceInterface interface {
+	Execute(file multipart.File, fileHeader *multipart.FileHeader) error
+}
+
 type Row struct {
 	data   []byte
 	header string

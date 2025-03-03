@@ -9,6 +9,10 @@ import (
 	"strings"
 )
 
+type ProcessBankSlipRowsServiceInterface interface {
+	Execute(context context.Context, messagesChannel chan messaging.Message)
+}
+
 type ProcessBankSlipRowsService struct {
 	bankSlipFileRepository bankSlipEntities.BankSlipFileMetadataRepository
 	bankSlipRepository     bankSlipEntities.BankSlipRepository

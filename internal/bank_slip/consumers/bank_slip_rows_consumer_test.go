@@ -1,22 +1,19 @@
 package bank_slip
 
 import (
-	"bytes"
-	"io"
-	"reflect"
+	"context"
 	"testing"
 
-	bankSlipEntities "performatic-file-processor/internal/bank_slip/entity"
 	bankSlipMocks "performatic-file-processor/internal/bank_slip/mocks"
-	"performatic-file-processor/internal/handler"
+	"performatic-file-processor/internal/messaging"
+	"performatic-file-processor/internal/mocks"
 	sharedMocks "performatic-file-processor/internal/mocks"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 )
 
-type TestSuitReceiveUploadService struct {
+type TestSuitBankSlipRowsConsumer struct {
 	suite.Suite
 	mockBankSlipRepo         *bankSlipMocks.BankSlipRepositoryMock
 	mockBankSlipFileRepo     *bankSlipMocks.BankSlipFileMetadataRepositoryMock
@@ -25,7 +22,7 @@ type TestSuitReceiveUploadService struct {
 	service                  *ReceiveUploadService
 }
 
-func (testSuit *TestSuitReceiveUploadService) SetupTest() {
+func (testSuit *TestSuitBankSlipRowsConsumer) SetupTest() {
 	testSuit.mockBankSlipRepo = new(bankSlipMocks.BankSlipRepositoryMock)
 	testSuit.mockBankSlipFileRepo = new(bankSlipMocks.BankSlipFileMetadataRepositoryMock)
 	testSuit.mockMultipartFileHandler = new(sharedMocks.FileHandlerMock)
@@ -42,103 +39,46 @@ func (testSuit *TestSuitReceiveUploadService) SetupTest() {
 }
 
 func TestReceiveUploadService(t *testing.T) {
-	suite.Run(t, new(TestSuitReceiveUploadService))
+	suite.Run(t, new(TestSuitBankSlipRowsConsumer))
+}
+func (testSuit *TestSuitBankSlipRowsConsumer) TestExecuteSuccess() {
+	mockMessageConsumer := new(mocks.MessageConsumerMock)
+	mockProcessBankSlipRowsService := new(bankSlipMocks.ProcessBankSlipRowsServiceMock)
+
+	consumer := NewBankSlipRowsConsumer(
+		mockProcessBankSlipRowsService,
+		mockMessageConsumer,
+		2,
+	)
+
+	mockMessage := mocks.NewMessageMock()
+
+	mockMessageConsumer.On("SubscribeInTopic", mock.Anything, "rows-to-process").Return(nil)
+	mockMessageConsumer.On("Consume", mock.Anything, "rows-to-process").Return(mockMessage, nil).Once()
+
+	mockProcessBankSlipRowsService.On("Execute", mock.Anything, mock.Anything).Return(nil).Once()
+
+	go consumer.Execute()
+
+	mockMessageConsumer.AssertExpectations(testSuit.T())
+	mockProcessBankSlipRowsService.AssertExpectations(testSuit.T())
 }
 
-func (suit *TestSuitReceiveUploadService) TestReceiveUploadService_ShouldReturnErrorIfInsertMetadataFails() {
-	fileContent := bytes.NewBufferString("headerData\nrow1\nrow2\n").Bytes()
-	fileName := "testfile.txt"
-	file, fileHeaders, err := sharedMocks.CreateMultipartFileMock(fileName, fileContent)
-	if err != nil {
-		panic(err)
-	}
+func (testSuit *TestSuitBankSlipRowsConsumer) TestExecuteConsumeError() {
+	mockMessageConsumer := new(sharedMocks.MessageConsumerMock)
+	mockProcessBankSlipRowsService := new(bankSlipMocks.ProcessBankSlipRowsServiceMock)
 
-	suit.mockBankSlipFileRepo.On("Insert", mock.Anything).Return(assert.AnError).Once()
+	consumer := NewBankSlipRowsConsumer(
+		mockProcessBankSlipRowsService,
+		mockMessageConsumer,
+		2,
+	)
 
-	err = suit.service.Execute(file, fileHeaders)
-	assert.Error(suit.T(), err)
+	mockMessageConsumer.On("SubscribeInTopic", mock.Anything, "rows-to-process").Return(nil)
+	mockMessageConsumer.On("Consume", mock.Anything, "rows-to-process").Return(messaging.Message{}, context.Canceled).Once()
 
-	suit.mockBankSlipFileRepo.AssertCalled(suit.T(), "Insert", mock.MatchedBy(func(bankSlipFile *bankSlipEntities.BankSlipFileMetadata) bool {
-		return assert.Equal(suit.T(), fileName, bankSlipFile.FileName)
-	}))
-}
+	go consumer.Execute()
 
-func (suit *TestSuitReceiveUploadService) TestReceiveUploadService_ShouldReturnErrorIfSaveFileFails() {
-	fileContent := bytes.NewBufferString("headerData\nrow1\nrow2\n").Bytes()
-	fileName := "testfile.txt"
-	file, fileHeaders, err := sharedMocks.CreateMultipartFileMock(fileName, fileContent)
-	if err != nil {
-		panic(err)
-	}
-
-	suit.mockBankSlipFileRepo.On("Insert", mock.Anything).Return(nil).Once()
-	suit.mockMultipartFileHandler.On("SaveFile", mock.Anything).Return(nil, assert.AnError).Once()
-
-	err = suit.service.Execute(file, fileHeaders)
-	assert.Error(suit.T(), err)
-
-	suit.mockBankSlipFileRepo.AssertCalled(suit.T(), "Insert", mock.MatchedBy(func(bankSlipFile *bankSlipEntities.BankSlipFileMetadata) bool {
-		return assert.Equal(suit.T(), fileName, bankSlipFile.FileName)
-	}))
-	suit.mockMultipartFileHandler.AssertCalled(suit.T(), "SaveFile", handler.NewMultipartFile(file, fileHeaders))
-}
-
-func (suit *TestSuitReceiveUploadService) TestReceiveUploadService_ShouldIgnoreWhenReadHeaderThrowsNotEOF() {
-	fileContent := bytes.NewBufferString("headerData\nrow1,row1\nrow2,row2").Bytes()
-	fileName := "testfile.txt"
-	file, fileHeaders, err := sharedMocks.CreateMultipartFileMock(fileName, fileContent)
-	if err != nil {
-		panic(err)
-	}
-
-	mockSavedFile := sharedMocks.NewSavedFileMock()
-	mockedReader := sharedMocks.NewReaderMock()
-
-	suit.mockBankSlipFileRepo.On("Insert", mock.Anything).Run(func(arg mock.Arguments) {
-		arg.Get(0).(*bankSlipEntities.BankSlipFileMetadata).ID = "any_id"
-	}).Return(nil).Once()
-	suit.mockMultipartFileHandler.On("SaveFile", mock.Anything).Return(mockSavedFile, nil).Once()
-	suit.mockMessageProducer.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return(nil)
-	mockedReader.On("Read", mock.Anything).Return(0, assert.AnError).Once()
-	mockSavedFile.On("Open").Return(mockedReader).Once()
-	mockSavedFile.On("Delete").Return(nil).Once()
-
-	err = suit.service.Execute(file, fileHeaders)
-	assert.Error(suit.T(), err)
-
-	suit.mockBankSlipFileRepo.AssertCalled(suit.T(), "Insert", mock.MatchedBy(func(bankSlipFile *bankSlipEntities.BankSlipFileMetadata) bool {
-		return assert.Equal(suit.T(), fileName, bankSlipFile.FileName)
-	}))
-	suit.mockMultipartFileHandler.AssertCalled(suit.T(), "SaveFile", handler.NewMultipartFile(file, fileHeaders))
-	suit.mockMessageProducer.AssertNotCalled(suit.T(), "Publish")
-}
-
-func (suit *TestSuitReceiveUploadService) TestReceiveUploadService_ShouldIgnoreWhenFailsReadingHeader() {
-	fileContent := bytes.NewBufferString("headerData\nrow1,row1\nrow2,row2").Bytes()
-	fileName := "testfile.txt"
-	file, fileHeaders, err := sharedMocks.CreateMultipartFileMock(fileName, fileContent)
-	if err != nil {
-		panic(err)
-	}
-
-	mockSavedFile := sharedMocks.NewSavedFileMock()
-	mockedReader := sharedMocks.NewReaderMock()
-
-	suit.mockBankSlipFileRepo.On("Insert", mock.Anything).Run(func(arg mock.Arguments) {
-		arg.Get(0).(*bankSlipEntities.BankSlipFileMetadata).ID = "any_id"
-	}).Return(nil).Once()
-	suit.mockMultipartFileHandler.On("SaveFile", mock.Anything).Return(mockSavedFile, nil).Once()
-	suit.mockMessageProducer.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return(nil)
-	mockedReader.On("Read", mock.Anything).Return(5, assert.AnError).Once()
-	mockSavedFile.On("Open").Return(mockedReader).Once()
-	mockSavedFile.On("Delete").Return(nil).Once()
-
-	err = suit.service.Execute(file, fileHeaders)
-	assert.Error(suit.T(), err)
-
-	suit.mockBankSlipFileRepo.AssertCalled(suit.T(), "Insert", mock.MatchedBy(func(bankSlipFile *bankSlipEntities.BankSlipFileMetadata) bool {
-		return assert.Equal(suit.T(), fileName, bankSlipFile.FileName)
-	}))
-	suit.mockMultipartFileHandler.AssertCalled(suit.T(), "SaveFile", handler.NewMultipartFile(file, fileHeaders))
-	suit.mockMessageProducer.AssertNotCalled(suit.T(), "Publish")
+	mockMessageConsumer.AssertExpectations(testSuit.T())
+	mockProcessBankSlipRowsService.AssertExpectations(testSuit.T())
 }

@@ -2,18 +2,19 @@ package bank_slip
 
 import (
 	"context"
+	"log"
 	bank_slip "performatic-file-processor/internal/bank_slip/services"
 	"performatic-file-processor/internal/messaging"
 )
 
 type BankSlipRowsConsumer struct {
-	processBankSlipRowsService *bank_slip.ProcessBankSlipRowsService
+	processBankSlipRowsService bank_slip.ProcessBankSlipRowsServiceInterface
 	messageConsumer            messaging.MessageConsumer
 	processors                 int
 }
 
 func NewBankSlipRowsConsumer(
-	processBankSlipRowsService *bank_slip.ProcessBankSlipRowsService,
+	processBankSlipRowsService bank_slip.ProcessBankSlipRowsServiceInterface,
 	messageConsumer messaging.MessageConsumer,
 	processors int,
 ) *BankSlipRowsConsumer {
@@ -24,20 +25,25 @@ func NewBankSlipRowsConsumer(
 	}
 }
 
-func (s *BankSlipRowsConsumer) Execute() {
+func (s *BankSlipRowsConsumer) Execute(ctx context.Context) {
 	messagesChannel := make(chan messaging.Message)
 
 	for range s.processors {
-		go s.processBankSlipRowsService.Execute(context.Background(), messagesChannel)
+		go s.processBankSlipRowsService.Execute(ctx, messagesChannel)
 	}
 
-	s.messageConsumer.SubscribeInTopic(context.TODO(), "rows-to-process")
+	s.messageConsumer.SubscribeInTopic(ctx, "rows-to-process")
 
 	for {
-		message, err := s.messageConsumer.Consume(context.TODO(), "rows-to-process")
-		if err != nil {
-			continue
+		select {
+		case <-ctx.Done():
+			log.Println("Exiting BankSlipRowsConsumer...")
+		default:
+			message, err := s.messageConsumer.Consume(ctx, "rows-to-process")
+			if err != nil {
+				continue
+			}
+			messagesChannel <- message
 		}
-		messagesChannel <- message
 	}
 }

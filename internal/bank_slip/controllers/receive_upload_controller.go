@@ -8,10 +8,12 @@ import (
 )
 
 type ReceiveUploadController struct {
-	service *bankSlip.ReceiveUploadService
+	service bankSlip.ReceiveUploadServiceInterface
 }
 
-func NewReceiveUploadController(service *bankSlip.ReceiveUploadService) *ReceiveUploadController {
+func NewReceiveUploadController(
+	service bankSlip.ReceiveUploadServiceInterface,
+) *ReceiveUploadController {
 	return &ReceiveUploadController{service: service}
 }
 
