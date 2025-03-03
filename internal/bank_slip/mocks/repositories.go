@@ -21,6 +21,10 @@ type BankSlipRepositoryMock struct {
 
 func (m *BankSlipRepositoryMock) GetExistingByDebitIds(debitIds []string) (map[entities.DebitId]entities.Existing, error) {
 	args := m.Called(debitIds)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+
 	return args.Get(0).(map[entities.DebitId]entities.Existing), args.Error(1)
 }
 

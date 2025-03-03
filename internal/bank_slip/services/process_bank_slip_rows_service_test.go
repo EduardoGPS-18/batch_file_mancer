@@ -91,6 +91,40 @@ func (s *TestSuit) TestProcessBankSlipRowsService_ShouldDoNothingWhenFailCreatin
 	s.mockBankSlipRepository.AssertNotCalled(s.T(), "InsertMany")
 }
 
+func (s *TestSuit) TestProcessBankSlipRowsService_ShouldDoNothingWhenFailGettingExistingDebits() {
+	message := bankSlipMocks.NewKafkaMessageMock()
+
+	messageWithHeaderAndDataWithDiferentLength := map[string]any{
+		"header": "name,governmentId,email,debtAmount,debtDueDate,debtId",
+		"data":   "John Doe,john.doe@example.com,1000.50,2023-12-31,debt123",
+		"fileId": "fileId",
+	}
+	message.On("Data").Return(messageWithHeaderAndDataWithDiferentLength, nil).Once()
+	message.On("Commit")
+
+	s.mockBankSlipRepository.On("GetExistingByDebitIds", mock.Anything).Return(nil, assert.AnError).Once()
+	s.mockBankSlipRepository.On("InsertMany", mock.Anything).Return(nil).Once()
+
+	messagesChannel := make(chan messaging.Message, 1)
+	messagesChannel <- message
+
+	message.On("Data").Return(nil, assert.AnError).Once()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s.service.Execute(context.Background(), messagesChannel)
+	}()
+	close(messagesChannel)
+	wg.Wait()
+
+	message.AssertCalled(s.T(), "Data")
+	message.AssertNotCalled(s.T(), "Commit")
+	s.mockBankSlipRepository.AssertNotCalled(s.T(), "GetExistingByDebitIds")
+	s.mockBankSlipRepository.AssertNotCalled(s.T(), "InsertMany")
+}
+
 func (s *TestSuit) TestProcessBankSlipRowsService_ShouldDoNothingIfTheresNtDebitToInsert() {
 	message := bankSlipMocks.NewKafkaMessageMock()
 
