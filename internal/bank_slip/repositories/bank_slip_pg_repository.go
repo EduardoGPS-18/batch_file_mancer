@@ -16,6 +16,27 @@ func NewBankSlipPgRepository(db *sql.DB) *BankSlipPgRepository {
 	return &BankSlipPgRepository{db: db}
 }
 
+func (r *BankSlipPgRepository) UpdateMany(bankSlips map[entities.DebitId]*entities.BankSlip) error {
+	fields := []any{}
+	queryValues := ""
+	i := 0
+	for _, slip := range bankSlips {
+		fields = append(fields, slip.Status, slip.ErrorMessage, slip.DebtId)
+		queryValues += fmt.Sprintf("($%d, $%d, $%d)", i*3+1, i*3+2, i*3+3)
+		if i < len(bankSlips)-1 {
+			queryValues += ", "
+		}
+		i++
+	}
+
+	query := "UPDATE bank_slip SET status = $1, error_message = $2 WHERE debt_id = $3"
+	_, err := r.db.Exec(query, fields...)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (r *BankSlipPgRepository) InsertMany(bankSlips map[entities.DebitId]*entities.BankSlip) error {
 
 	fields := []any{}
@@ -30,8 +51,8 @@ func (r *BankSlipPgRepository) InsertMany(bankSlips map[entities.DebitId]*entiti
 		i++
 	}
 
-	query := fmt.Sprintf("INSERT INTO bank_slip (user_name, government_id, user_email, debt_amount, debt_due_date, debt_id, bank_slip_file_id, status, error_message) VALUES %s", queryValues)
-	_, err := r.db.Exec(query, fields...)
+	query := fmt.Sprintf("INSERT INTO bank_slip (user_name, government_id, user_email, debt_amount, debt_due_date, debt_id, bank_slip_file_id, status, error_message) VALUES %s ON CONFLICT DO NOTHING RETURNING ID", queryValues)
+	err := r.db.QueryRow(query, fields...).Scan()
 	if err != nil {
 		return err
 	}

@@ -180,13 +180,12 @@ func (s *TestSuit) TestProcessBankSlipRowsService_ShouldSaveWithErrorIfDebitAlre
 
 	errorTxt := "Debt already exists"
 	expected := &bankSlipEntities.BankSlip{
-		ID:                     0,
 		UserName:               "John Doe",
 		GovernmentId:           555,
 		UserEmail:              "john.doe@example.com",
 		BankSlipFileMetadataId: "fileId",
 		ErrorMessage:           &errorTxt,
-		Status:                 bankSlipEntities.BankSlipStatusError,
+		Status:                 bankSlipEntities.BankSlipStatusSuccess,
 		DebtAmount:             1000.50,
 		DebtDueDate:            time.Date(2023, 12, 31, 0, 0, 0, 0, time.UTC),
 		DebtId:                 "debt123",
@@ -253,7 +252,6 @@ func (s *TestSuit) TestProcessBankSlipRowsService_ShouldNotCommitMessageWhenInse
 	}))
 
 	expected := &bankSlipEntities.BankSlip{
-		ID:                     0,
 		UserName:               "John Doe",
 		GovernmentId:           123,
 		UserEmail:              "john.doe@example.com",
@@ -303,7 +301,6 @@ func (s *TestSuit) TestProcessBankSlipRowsService_ShouldProcessSuccessfullyBankS
 	}))
 
 	expected := &bankSlipEntities.BankSlip{
-		ID:                     0,
 		UserName:               "John Doe",
 		GovernmentId:           123,
 		UserEmail:              "john.doe@example.com",
@@ -354,7 +351,6 @@ func (s *TestSuit) TestProcessBankSlipRowsService_ShouldProcessSuccessfullyWhenF
 	}))
 
 	expected := &bankSlipEntities.BankSlip{
-		ID:                     0,
 		UserName:               "John Doe",
 		GovernmentId:           123,
 		UserEmail:              "john.doe@example.com",
@@ -405,7 +401,6 @@ func (s *TestSuit) TestProcessBankSlipRowsService_ShouldProcessOnlyValidMessages
 	}))
 
 	expected := &bankSlipEntities.BankSlip{
-		ID:                     0,
 		UserName:               "Mary Doe",
 		GovernmentId:           987,
 		UserEmail:              "mary.doe@example.com",

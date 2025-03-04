@@ -130,9 +130,9 @@ func TestUpdateRowToError(t *testing.T) {
 	debtDueDate, _ := time.Parse("2006-01-02", "2023-12-31")
 	bankSlip := newBankSlip(123, 1000.50, debtDueDate, "debt123", "John Doe", "john.doe@example.com", "file123", BankSlipStatusPending)
 
-	errorMessage := "Some error occurred"
-	bankSlip.UpdateRowToError(errorMessage)
+	errorMessage := "Debt already exists"
+	bankSlip.UpdateRowToDuplicated()
 
-	assert.Equal(t, BankSlipStatusError, bankSlip.Status)
+	assert.Equal(t, BankSlipStatusSuccess, bankSlip.Status)
 	assert.Equal(t, &errorMessage, bankSlip.ErrorMessage)
 }

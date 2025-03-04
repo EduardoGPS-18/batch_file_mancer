@@ -35,3 +35,8 @@ func (m *BankSlipRepositoryMock) InsertMany(bankSlips map[entities.DebitId]*enti
 	args := m.Called(bankSlips)
 	return args.Error(0)
 }
+
+func (m *BankSlipRepositoryMock) UpdateMany(bankSlips map[entities.DebitId]*entities.BankSlip) error {
+	args := m.Called(bankSlips)
+	return args.Error(0)
+}

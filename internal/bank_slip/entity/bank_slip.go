@@ -14,19 +14,19 @@ type DebitId = string
 type Existing = bool
 
 const (
-	BankSlipStatusPending       BankSlipStatus = "PENDING"
-	BankSlipStatusError         BankSlipStatus = "ERROR"
-	BankSlipStatusSlipGenerated BankSlipStatus = "GENERATED"
-	BankSlipStatusEmailSent     BankSlipStatus = "SENT"
+	BankSlipStatusPending              BankSlipStatus = "PENDING"
+	BankSlipStatusSuccess              BankSlipStatus = "SUCCESS"
+	BankSlipStatusGenerateBillingError BankSlipStatus = "GENERATING_BILLING_ERROR"
+	BankSlipStatusSendingEmailError    BankSlipStatus = "SENT_EMAIL_WITH_ERROR"
 )
 
 type BankSlipRepository interface {
+	UpdateMany(bankSlips map[DebitId]*BankSlip) error
 	InsertMany(bankSlips map[DebitId]*BankSlip) error
 	GetExistingByDebitIds(debitIds []string) (map[DebitId]Existing, error)
 }
 
 type BankSlip struct {
-	ID                     int
 	DebtId                 string
 	DebtAmount             float64
 	DebtDueDate            time.Time
@@ -97,7 +97,21 @@ func NewBankSlipFromRow(fileMetadataId, data, header string) (*BankSlip, error) 
 	), nil
 }
 
-func (bankSlip *BankSlip) UpdateRowToError(errorMessage string) {
+func (bankSlip *BankSlip) UpdateRowToDuplicated() {
+	errorMessage := "Debt already exists"
 	bankSlip.ErrorMessage = &errorMessage
-	bankSlip.Status = BankSlipStatusError
+}
+
+func (bankSlip *BankSlip) ErrorGeneratingBilling(errorMessage string) {
+	bankSlip.ErrorMessage = &errorMessage
+	bankSlip.Status = BankSlipStatusGenerateBillingError
+}
+
+func (bankSlip *BankSlip) ErrorSendingEmail(errorMessage string) {
+	bankSlip.ErrorMessage = &errorMessage
+	bankSlip.Status = BankSlipStatusSendingEmailError
+}
+
+func (bankSlip *BankSlip) Success() {
+	bankSlip.Status = BankSlipStatusSuccess
 }

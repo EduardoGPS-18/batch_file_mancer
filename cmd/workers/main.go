@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"log"
 	bankSlipConsumers "performatic-file-processor/internal/bank_slip/consumers"
 	bankSlipRepository "performatic-file-processor/internal/bank_slip/repositories"
 	bankSlipServices "performatic-file-processor/internal/bank_slip/services"
 	"performatic-file-processor/internal/database"
 	"performatic-file-processor/internal/kafka"
+	"performatic-file-processor/internal/messaging"
 )
 
 func main() {
@@ -27,7 +29,7 @@ func main() {
 		bankSlipRowsProcessor,
 		kafkaConsumer,
 		30,
-	).Execute()
+	).Execute(context.Background(), make(chan messaging.Message))
 
 	log.Println("Worker started!")
 	for {
