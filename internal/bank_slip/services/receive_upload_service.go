@@ -105,9 +105,10 @@ func (*ReceiveUploadService) readFileContent(locallyFile io.Reader, buffer []byt
 	for {
 		bytesRead, err := locallyFile.Read(buffer)
 		if bytesRead == 0 {
+			fileChannel <- Row{data: []byte(remainder), header: header}
 			break
 		}
-		if err != nil {
+		if err != nil && err != io.EOF {
 			log.Printf("Error Reading the File: %v", err)
 			break
 		}
@@ -142,7 +143,7 @@ func (*ReceiveUploadService) readFileHeader(locallyFile io.Reader, buffer []byte
 			log.Printf("Error Reading the File: %v", err)
 			break
 		}
-		str := string(buffer)
+		str := string(buffer[:bytesRead])
 
 		finalHeaderIdx := strings.Index(str, "\n")
 		if finalHeaderIdx == -1 {

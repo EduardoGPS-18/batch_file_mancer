@@ -6,9 +6,8 @@ CREATE TABLE bank_slip_file (
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-
 CREATE TABLE bank_slip (
-  debt_id PRIMARY KEY UNIQUE UUID,
+  debt_id UUID PRIMARY KEY UNIQUE,
   debt_amount NUMERIC(10,2) NOT NULL,
   debt_due_date DATE NOT NULL,
   user_name VARCHAR(255) NOT NULL,

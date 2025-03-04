@@ -12,6 +12,7 @@ import (
 type BankSlipStatus string
 type DebitId = string
 type Existing = bool
+type Success = bool
 
 const (
 	BankSlipStatusPending              BankSlipStatus = "PENDING"
@@ -22,7 +23,7 @@ const (
 
 type BankSlipRepository interface {
 	UpdateMany(bankSlips map[DebitId]*BankSlip) error
-	InsertMany(bankSlips map[DebitId]*BankSlip) error
+	InsertMany(bankSlips map[DebitId]*BankSlip) (map[DebitId]Success, error)
 	GetExistingByDebitIds(debitIds []string) (map[DebitId]Existing, error)
 }
 

@@ -7,13 +7,26 @@ import (
 type FooBillingService struct {
 }
 
-func (f FooBillingService) GenerateBiling(entities []*bankSlipEntities.BankSlip) *map[bankSlipEntities.DebitId]error {
+type GenerateBillingData struct {
+	Amount   float64
+	DueDate  string
+	Customer string
+}
+
+func NewFooBillingService() *FooBillingService {
+	return &FooBillingService{}
+}
+
+func (f FooBillingService) GenerateBiling(
+	bankSlips *map[bankSlipEntities.DebitId]*bankSlipEntities.BankSlip,
+) *map[bankSlipEntities.DebitId]error {
 	toApi := map[string]any{}
-	for _, entity := range entities {
-		toApi[entity.DebtId] = map[string]any{
-			"amount":   entity.DebtAmount,
-			"due_date": entity.DebtDueDate,
-			"customer": entity.UserEmail,
+
+	for _, entity := range *bankSlips {
+		toApi[entity.DebtId] = GenerateBillingData{
+			Amount:   entity.DebtAmount,
+			DueDate:  entity.DebtDueDate.Format("2006-01-02"),
+			Customer: entity.UserEmail,
 		}
 	}
 

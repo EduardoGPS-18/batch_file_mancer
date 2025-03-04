@@ -1,4 +1,4 @@
-package mail
+package email
 
 import bankSlipEntities "performatic-file-processor/internal/bank_slip/entity"
 
@@ -23,10 +23,10 @@ func (s *FooSendMail) sendMail(_ map[bankSlipEntities.DebitId]SentEmailData, _ [
 }
 
 func (s *FooSendMail) SendBankSlipWaitingPaymentEmail(
-	data []*bankSlipEntities.BankSlip,
+	data *map[bankSlipEntities.DebitId]*bankSlipEntities.BankSlip,
 ) *map[bankSlipEntities.DebitId]error {
 	toApi := map[bankSlipEntities.DebitId]SentEmailData{}
-	for _, entity := range data {
+	for _, entity := range *data {
 		toApi[entity.DebtId] = SentEmailData{
 			To:       entity.UserEmail,
 			Subject:  "Billing Waiting Payment",

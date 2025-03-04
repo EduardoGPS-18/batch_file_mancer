@@ -25,10 +25,14 @@ type ProcessBankSlipRowsService struct {
 func NewProcessBankSlipRowsService(
 	bankSlipFileRepository bankSlipEntities.BankSlipFileMetadataRepository,
 	bankSlipRepository bankSlipEntities.BankSlipRepository,
+	emailService emailService.SendEmailService,
+	billingService billing.BilingService,
 ) *ProcessBankSlipRowsService {
 	return &ProcessBankSlipRowsService{
 		bankSlipFileRepository: bankSlipFileRepository,
 		bankSlipRepository:     bankSlipRepository,
+		emailService:           emailService,
+		billingService:         billingService,
 	}
 }
 
@@ -50,11 +54,13 @@ func (s *ProcessBankSlipRowsService) Execute(context context.Context, messagesCh
 
 			bankSlips := map[bankSlipEntities.DebitId]*bankSlipEntities.BankSlip{}
 
+			totalExpected := 0
 			for row := range strings.SplitSeq(fileData, "\n") {
 				if row == "" {
 					continue
 				}
 
+				totalExpected++
 				bankSlip, err := bankSlipEntities.NewBankSlipFromRow(fileId, row, fileHeader)
 				if err != nil {
 					fmt.Printf("Error creating Bank Slip Data: %v\n", err)
@@ -68,7 +74,18 @@ func (s *ProcessBankSlipRowsService) Execute(context context.Context, messagesCh
 				continue
 			}
 
-			err = s.bankSlipRepository.InsertMany(bankSlips)
+			insertedDebtIds, err := s.bankSlipRepository.InsertMany(bankSlips)
+
+			for debitId, success := range insertedDebtIds {
+				if !success {
+					delete(bankSlips, debitId)
+				}
+			}
+
+			if err != nil {
+				fmt.Printf("Error inserting new debts: %v\n", err.Error())
+				continue
+			}
 
 			s.processInsertedBankSlips(bankSlips)
 
@@ -80,7 +97,7 @@ func (s *ProcessBankSlipRowsService) Execute(context context.Context, messagesCh
 			}
 
 			message.Commit()
-			log.Printf("Inserted %d new debts\n", len(bankSlips))
+			log.Printf("From %d inserted %d new debts\n", totalExpected, len(bankSlips))
 		}
 	}
 }
@@ -91,7 +108,7 @@ func (s *ProcessBankSlipRowsService) processInsertedBankSlips(
 	bankSlipsWithError = map[bankSlipEntities.DebitId]*bankSlipEntities.BankSlip{}
 
 	errorsGeneratingBilling := *s.billingService.GenerateBiling(&bankSlips)
-	for debtId := range bankSlips {
+	for debtId := range errorsGeneratingBilling {
 		bankSlipWithError := bankSlips[debtId]
 		bankSlipWithError.ErrorGeneratingBilling(errorsGeneratingBilling[debtId].Error())
 		if bankSlipWithError != nil {
@@ -101,7 +118,7 @@ func (s *ProcessBankSlipRowsService) processInsertedBankSlips(
 	}
 
 	errorsSendingEmail := *s.emailService.SendBankSlipWaitingPaymentEmail(&bankSlips)
-	for debtId := range bankSlips {
+	for debtId := range errorsSendingEmail {
 		bankSlipWithError := bankSlips[debtId]
 		bankSlipWithError.ErrorSendingEmail(errorsSendingEmail[debtId].Error())
 		if bankSlipWithError != nil {

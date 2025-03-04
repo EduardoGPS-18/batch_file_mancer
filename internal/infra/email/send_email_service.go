@@ -1,4 +1,4 @@
-package mail
+package email
 
 import bankSlipEntities "performatic-file-processor/internal/bank_slip/entity"
 
