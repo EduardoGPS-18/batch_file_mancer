@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"log"
 	bankSlipEntities "performatic-file-processor/internal/bank_slip/entity"
-	"performatic-file-processor/internal/infra/billing"
-	emailService "performatic-file-processor/internal/infra/email"
+	bankSlipProviders "performatic-file-processor/internal/bank_slip/providers"
 	"performatic-file-processor/internal/messaging"
 	"strings"
 )
@@ -16,23 +15,20 @@ type ProcessBankSlipRowsServiceInterface interface {
 }
 
 type ProcessBankSlipRowsService struct {
-	bankSlipFileRepository bankSlipEntities.BankSlipFileMetadataRepository
-	bankSlipRepository     bankSlipEntities.BankSlipRepository
-	emailService           emailService.SendEmailService
-	billingService         billing.BilingService
+	bankSlipFileRepository      bankSlipEntities.BankSlipFileMetadataRepository
+	bankSlipRepository          bankSlipEntities.BankSlipRepository
+	generateBillingAndSentEmail bankSlipProviders.GenerateBillingAndSentEmailProvider
 }
 
 func NewProcessBankSlipRowsService(
 	bankSlipFileRepository bankSlipEntities.BankSlipFileMetadataRepository,
 	bankSlipRepository bankSlipEntities.BankSlipRepository,
-	emailService emailService.SendEmailService,
-	billingService billing.BilingService,
+	generateBillingAndSentEmail bankSlipProviders.GenerateBillingAndSentEmailProvider,
 ) *ProcessBankSlipRowsService {
 	return &ProcessBankSlipRowsService{
-		bankSlipFileRepository: bankSlipFileRepository,
-		bankSlipRepository:     bankSlipRepository,
-		emailService:           emailService,
-		billingService:         billingService,
+		bankSlipFileRepository:      bankSlipFileRepository,
+		bankSlipRepository:          bankSlipRepository,
+		generateBillingAndSentEmail: generateBillingAndSentEmail,
 	}
 }
 
@@ -74,7 +70,7 @@ func (s *ProcessBankSlipRowsService) Execute(context context.Context, messagesCh
 				continue
 			}
 
-			insertedDebtIds, err := s.bankSlipRepository.InsertMany(bankSlips)
+			insertedDebtIds, err := s.bankSlipRepository.InsertMany(&bankSlips)
 
 			for debitId, success := range insertedDebtIds {
 				if !success {
@@ -87,9 +83,9 @@ func (s *ProcessBankSlipRowsService) Execute(context context.Context, messagesCh
 				continue
 			}
 
-			s.processInsertedBankSlips(bankSlips)
+			debitsWithErrors := s.generateBillingAndSentEmail.GenerateBillingAndSentEmail(&bankSlips)
 
-			s.bankSlipRepository.UpdateMany(bankSlips)
+			err = s.bankSlipRepository.UpdateMany(&bankSlips, debitsWithErrors)
 
 			if err != nil {
 				fmt.Printf("Error inserting new debts: %v\n", err.Error())
@@ -100,37 +96,6 @@ func (s *ProcessBankSlipRowsService) Execute(context context.Context, messagesCh
 			log.Printf("From %d inserted %d new debts\n", totalExpected, len(bankSlips))
 		}
 	}
-}
-
-func (s *ProcessBankSlipRowsService) processInsertedBankSlips(
-	bankSlips map[bankSlipEntities.DebitId]*bankSlipEntities.BankSlip,
-) (bankSlipsWithError map[bankSlipEntities.DebitId]*bankSlipEntities.BankSlip) {
-	bankSlipsWithError = map[bankSlipEntities.DebitId]*bankSlipEntities.BankSlip{}
-
-	errorsGeneratingBilling := *s.billingService.GenerateBiling(&bankSlips)
-	for debtId := range errorsGeneratingBilling {
-		bankSlipWithError := bankSlips[debtId]
-		bankSlipWithError.ErrorGeneratingBilling(errorsGeneratingBilling[debtId].Error())
-		if bankSlipWithError != nil {
-			bankSlipsWithError[debtId] = bankSlipWithError
-			delete(bankSlips, debtId)
-		}
-	}
-
-	errorsSendingEmail := *s.emailService.SendBankSlipWaitingPaymentEmail(&bankSlips)
-	for debtId := range errorsSendingEmail {
-		bankSlipWithError := bankSlips[debtId]
-		bankSlipWithError.ErrorSendingEmail(errorsSendingEmail[debtId].Error())
-		if bankSlipWithError != nil {
-			bankSlipsWithError[debtId] = bankSlipWithError
-			delete(bankSlips, debtId)
-		}
-	}
-
-	for _, bankSlip := range bankSlips {
-		bankSlip.Success()
-	}
-	return bankSlipsWithError
 }
 
 func (s *ProcessBankSlipRowsService) getFieldsFromMessage(message messaging.Message) (fileData, fileHeader, fileId string, err error) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	bankSlipConsumers "performatic-file-processor/internal/bank_slip/consumers"
+	bankSlipProvider "performatic-file-processor/internal/bank_slip/providers"
 	bankSlipRepository "performatic-file-processor/internal/bank_slip/repositories"
 	bankSlipServices "performatic-file-processor/internal/bank_slip/services"
 	"performatic-file-processor/internal/database"
@@ -21,14 +22,17 @@ func main() {
 	bankSlipRepo := bankSlipRepository.NewBankSlipPgRepository(db)
 	emailService := mail.NewFooSendMailService()
 	billingService := billing.NewFooBillingService()
+	generateBillingAndSentEmailProvider := bankSlipProvider.NewGenerateBillingAndSentEmailProvider(
+		emailService,
+		billingService,
+	)
 
 	kafkaConsumer := kafka.NewKafkaConsumer()
 
 	bankSlipRowsProcessor := bankSlipServices.NewProcessBankSlipRowsService(
 		bankSlipFileRepo,
 		bankSlipRepo,
-		emailService,
-		billingService,
+		generateBillingAndSentEmailProvider,
 	)
 
 	go bankSlipConsumers.NewBankSlipRowsConsumer(

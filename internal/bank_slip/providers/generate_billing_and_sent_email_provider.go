@@ -1,30 +1,24 @@
 package bank_slip
 
 import (
-	bankSlipEntities "performatic-file-processor/internal/bank_slip/entity"
+	bsEntities "performatic-file-processor/internal/bank_slip/entity"
 	"performatic-file-processor/internal/infra/billing"
 	emailService "performatic-file-processor/internal/infra/email"
 )
 
-type GenerateBillingAndSentEmailResponse struct {
-	ErrorGeneratingBilling *map[bankSlipEntities.DebitId]*bankSlipEntities.BankSlip
-	ErrorSendingEmail      *map[bankSlipEntities.DebitId]*bankSlipEntities.BankSlip
-	Success                *map[bankSlipEntities.DebitId]*bankSlipEntities.BankSlip
-}
-
 type GenerateBillingAndSentEmailProvider interface {
 	GenerateBillingAndSentEmail(
-		bankSlips *map[bankSlipEntities.DebitId]*bankSlipEntities.BankSlip,
-	) GenerateBillingAndSentEmailResponse
+		bankSlips *bsEntities.BankSlipMap,
+	) *bsEntities.BankSlipMap
 }
 
 type GenerateBillingAndSentEmailProviderImpl struct {
-	emailService   emailService.SendEmailService
+	emailService   emailService.EmailService
 	billingService billing.BilingService
 }
 
 func NewGenerateBillingAndSentEmailProvider(
-	emailService emailService.SendEmailService,
+	emailService emailService.EmailService,
 	billingService billing.BilingService,
 ) *GenerateBillingAndSentEmailProviderImpl {
 	return &GenerateBillingAndSentEmailProviderImpl{
@@ -34,7 +28,33 @@ func NewGenerateBillingAndSentEmailProvider(
 }
 
 func (p *GenerateBillingAndSentEmailProviderImpl) GenerateBillingAndSentEmail(
-	bankSlips *map[bankSlipEntities.DebitId]*bankSlipEntities.BankSlip,
-) GenerateBillingAndSentEmailResponse {
+	bankSlips *bsEntities.BankSlipMap,
+) *bsEntities.BankSlipMap {
+	successBankSlips := *bankSlips
+	bankSlipsWithError := map[bsEntities.DebitId]*bsEntities.BankSlip{}
 
+	errorsGeneratingBilling := *p.billingService.GenerateBiling(&successBankSlips)
+	for debtId := range errorsGeneratingBilling {
+		bankSlipWithError := successBankSlips[debtId]
+		bankSlipWithError.ErrorGeneratingBilling(errorsGeneratingBilling[debtId].Error())
+		if bankSlipWithError != nil {
+			bankSlipsWithError[debtId] = bankSlipWithError
+			delete(successBankSlips, debtId)
+		}
+	}
+
+	errorsSendingEmail := *p.emailService.SendBankSlipWaitingPaymentEmail(&successBankSlips)
+	for debtId := range errorsSendingEmail {
+		bankSlipWithError := successBankSlips[debtId]
+		bankSlipWithError.ErrorSendingEmail(errorsSendingEmail[debtId].Error())
+		if bankSlipWithError != nil {
+			bankSlipsWithError[debtId] = bankSlipWithError
+			delete(successBankSlips, debtId)
+		}
+	}
+
+	for _, bankSlip := range successBankSlips {
+		bankSlip.Success()
+	}
+	return &bankSlipsWithError
 }

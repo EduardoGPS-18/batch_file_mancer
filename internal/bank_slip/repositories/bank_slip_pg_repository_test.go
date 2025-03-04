@@ -1,8 +1,10 @@
 package bank_slip
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
+	"log"
 	"testing"
 	"time"
 
@@ -48,14 +50,15 @@ func (s *TestSuitBankSlipPgRepository) TestBankSlipPgRepository_InsertMany() {
 		},
 	}
 
-	s.mock.ExpectExec("INSERT INTO bank_slip").
+	s.mock.ExpectQuery("INSERT INTO bank_slip").
 		WithArgs(
 			"John Doe", 5321, "johndoe@example.com", 1000.00, time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC), "1", "file_123", "pending", nil,
 		).
-		WillReturnResult(sqlmock.NewResult(1, 1))
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 
-	err := s.repository.InsertMany(bankSlips)
+	data, err := s.repository.InsertMany(&bankSlips)
 	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), map[entities.DebitId]entities.Success{"1": true}, data)
 }
 
 func (s *TestSuitBankSlipPgRepository) TestBankSlipPgRepository_InsertMany_LastWithoutComa() {
@@ -86,18 +89,23 @@ func (s *TestSuitBankSlipPgRepository) TestBankSlipPgRepository_InsertMany_LastW
 	}
 
 	// Configura a expectativa para a query no mock do banco de dados
-	s.mock.ExpectExec("INSERT INTO bank_slip").WithArgs(
+	s.mock.ExpectQuery("INSERT INTO bank_slip").WithArgs(
 		"John Doe", 5421, "john.doe@example.com", 1000.50, time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC), "1", "file1", "pending", nil,
 		"Jane Doe", 7632, "jane.doe@example.com", 2000.75, time.Date(2025, 8, 31, 0, 0, 0, 0, time.UTC), "2", "file2", "paid", &errorMsg,
-	).WillReturnResult(sqlmock.NewResult(1, 2))
+	).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(2))
 
 	// Chama o método InsertMany
-	err := s.repository.InsertMany(bankSlips)
+	data, err := s.repository.InsertMany(&bankSlips)
 	assert.NoError(s.T(), err)
 
 	// Verifica se as expectativas do mock foram atendidas
 	err = s.mock.ExpectationsWereMet()
 	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), map[entities.DebitId]entities.Success{
+		"1": false,
+		"2": true,
+	}, data)
 }
 
 func (s *TestSuitBankSlipPgRepository) TestBankSlipPgRepository_InsertMany_Error() {
@@ -115,13 +123,13 @@ func (s *TestSuitBankSlipPgRepository) TestBankSlipPgRepository_InsertMany_Error
 		},
 	}
 
-	s.mock.ExpectExec("INSERT INTO bank_slip").
+	s.mock.ExpectQuery("INSERT INTO bank_slip").
 		WithArgs(
 			"John Doe", 5321, "johndoe@example.com", 1000.00, time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC), "1", "file_123", "pending", nil,
 		).
 		WillReturnError(fmt.Errorf("insert error"))
 
-	err := s.repository.InsertMany(bankSlips)
+	_, err := s.repository.InsertMany(&bankSlips)
 	assert.Error(s.T(), err)
 	assert.EqualError(s.T(), err, "insert error")
 
@@ -129,39 +137,91 @@ func (s *TestSuitBankSlipPgRepository) TestBankSlipPgRepository_InsertMany_Error
 	assert.NoError(s.T(), err)
 }
 
-func (s *TestSuitBankSlipPgRepository) TestBankSlipPgRepository_GetExistingByDebitIds() {
-	debitIds := []string{"1", "2", "3"}
-	rows := sqlmock.NewRows([]string{"debt_id"}).
-		AddRow("1").
-		AddRow("2")
+func (s *TestSuitBankSlipPgRepository) TestBankSlipPgRepository_UpdateMany() {
+	errorMessage := "error message"
+	bankSlips := []*bankSlipEntities.BankSlipMap{
+		{
+			"1": &bankSlipEntities.BankSlip{
+				DebtId:       "1",
+				Status:       "paid",
+				ErrorMessage: nil,
+			},
+		},
+		{
+			"2": &bankSlipEntities.BankSlip{
+				DebtId:       "2",
+				Status:       "failed",
+				ErrorMessage: &errorMessage,
+			},
+		},
+	}
 
-	s.mock.ExpectQuery("SELECT debt_id FROM bank_slip WHERE debt_id IN").
-		WithArgs("1", "2", "3").
-		WillReturnRows(rows)
+	s.mock.ExpectExec("UPDATE bank_slip").
+		WithArgs(
+			"1", "paid", nil,
+			"2", "failed", "error message",
+		).
+		WillReturnResult(sqlmock.NewResult(1, 2))
 
-	result, err := s.repository.GetExistingByDebitIds(debitIds)
+	err := s.repository.UpdateMany(bankSlips...)
 	assert.NoError(s.T(), err)
-
-	assert.Len(s.T(), result, 2)
-	assert.Contains(s.T(), result, "1")
-	assert.Contains(s.T(), result, "2")
-	assert.NotContains(s.T(), result, "3")
 
 	err = s.mock.ExpectationsWereMet()
 	assert.NoError(s.T(), err)
 }
 
-func (s *TestSuitBankSlipPgRepository) TestBankSlipPgRepository_GetExistingByDebitIds_Error() {
-	debitIds := []string{"1", "2", "3"}
+func (s *TestSuitBankSlipPgRepository) TestBankSlipPgRepository_UpdateMany_Error() {
+	bankSlips := []*bankSlipEntities.BankSlipMap{
+		{
+			"1": &bankSlipEntities.BankSlip{
+				DebtId:       "1",
+				Status:       "paid",
+				ErrorMessage: nil,
+			},
+		},
+	}
 
-	s.mock.ExpectQuery("SELECT debt_id FROM bank_slip WHERE debt_id IN").
-		WithArgs("1", "2", "3").
-		WillReturnError(fmt.Errorf("query error"))
+	s.mock.ExpectExec("UPDATE bank_slip").
+		WithArgs(
+			"1", "paid", nil,
+		).
+		WillReturnError(fmt.Errorf("update error"))
 
-	result, err := s.repository.GetExistingByDebitIds(debitIds)
+	err := s.repository.UpdateMany(bankSlips...)
 	assert.Error(s.T(), err)
-	assert.Nil(s.T(), result)
+	assert.EqualError(s.T(), err, "update error")
 
 	err = s.mock.ExpectationsWereMet()
 	assert.NoError(s.T(), err)
+}
+
+func (s *TestSuitBankSlipPgRepository) TestBankSlipPgRepository_InsertMany_ScanError() {
+	bankSlips := map[bankSlipEntities.DebitId]*bankSlipEntities.BankSlip{
+		"1": {
+			UserName:               "John Doe",
+			GovernmentId:           5321,
+			UserEmail:              "johndoe@example.com",
+			DebtAmount:             1000.00,
+			DebtDueDate:            time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC),
+			DebtId:                 "1",
+			BankSlipFileMetadataId: "file_123",
+			Status:                 "pending",
+			ErrorMessage:           nil,
+		},
+	}
+
+	s.mock.ExpectQuery("INSERT INTO bank_slip").
+		WithArgs(
+			"John Doe", 5321, "johndoe@example.com", 1000.00, time.Date(2025, 12, 31, 0, 0, 0, 0, time.UTC), "1", "file_123", "pending", nil,
+		).
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(nil))
+
+	logOutput := new(bytes.Buffer)
+	log.SetOutput(logOutput)
+	defer log.SetOutput(nil)
+
+	data, err := s.repository.InsertMany(&bankSlips)
+	assert.NoError(s.T(), err)
+	assert.Equal(s.T(), map[entities.DebitId]entities.Success{"1": false}, data)
+	assert.Contains(s.T(), logOutput.String(), "Failed to scan row")
 }

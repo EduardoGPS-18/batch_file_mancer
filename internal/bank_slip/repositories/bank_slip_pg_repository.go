@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"strings"
 
 	entities "performatic-file-processor/internal/bank_slip/entity"
 )
@@ -17,19 +16,21 @@ func NewBankSlipPgRepository(db *sql.DB) *BankSlipPgRepository {
 	return &BankSlipPgRepository{db: db}
 }
 
-func (r *BankSlipPgRepository) UpdateMany(bankSlips map[entities.DebitId]*entities.BankSlip) error {
+func (r *BankSlipPgRepository) UpdateMany(bankSlipList ...*entities.BankSlipMap) error {
 	fields := []any{}
 	queryValues := ""
 	i := 0
-	for _, slip := range bankSlips {
-		fields = append(fields, slip.DebtId, slip.Status, slip.ErrorMessage)
-		queryValues += fmt.Sprintf("(cast($%d AS uuid), $%d, $%d)", i*3+1, i*3+2, i*3+3)
-		if i < len(bankSlips)-1 {
-			queryValues += ", "
+	for _, bankSlipP := range bankSlipList {
+		bankSlip := *bankSlipP
+		for _, slip := range bankSlip {
+			fields = append(fields, slip.DebtId, slip.Status, slip.ErrorMessage)
+			queryValues += fmt.Sprintf("(cast($%d AS uuid), $%d, $%d)", i*3+1, i*3+2, i*3+3)
+			if i < len(bankSlip)-1 {
+				queryValues += ", "
+			}
+			i++
 		}
-		i++
 	}
-
 	query := fmt.Sprintf(`
 		UPDATE bank_slip bs 
 		SET
@@ -48,8 +49,8 @@ func (r *BankSlipPgRepository) UpdateMany(bankSlips map[entities.DebitId]*entiti
 	return nil
 }
 
-func (r *BankSlipPgRepository) InsertMany(bankSlips map[entities.DebitId]*entities.BankSlip) (map[entities.DebitId]entities.Success, error) {
-
+func (r *BankSlipPgRepository) InsertMany(bankSlipsP *entities.BankSlipMap) (map[entities.DebitId]entities.Success, error) {
+	bankSlips := *bankSlipsP
 	fields := []any{}
 	queryValues := ""
 	i := 0
@@ -74,34 +75,10 @@ func (r *BankSlipPgRepository) InsertMany(bankSlips map[entities.DebitId]*entiti
 		var debtId string
 		if err := queryResult.Scan(&debtId); err != nil {
 			log.Printf("Failed to scan row: %v", err)
+			continue
 		}
 		insertedDebtIds[debtId] = true
 	}
 
 	return insertedDebtIds, nil
-}
-
-func (r *BankSlipPgRepository) GetExistingByDebitIds(debtIds []string) (map[entities.DebitId]entities.Existing, error) {
-	quotedDebitIds := make([]string, len(debtIds))
-	args := make([]any, len(debtIds))
-	for i, id := range debtIds {
-		quotedDebitIds[i] = fmt.Sprintf("$%d", i+1)
-		args[i] = id
-	}
-
-	joinedDebitIds := strings.Join(quotedDebitIds, ", ")
-	selectQuery := fmt.Sprintf("SELECT debt_id FROM bank_slip WHERE debt_id IN (%s)", joinedDebitIds)
-
-	rows, err := r.db.Query(selectQuery, args...)
-	if err != nil {
-		return nil, err
-	}
-
-	bankSlips := map[entities.DebitId]entities.Existing{}
-	for rows.Next() {
-		var debtId string
-		rows.Scan(&debtId)
-		bankSlips[debtId] = true
-	}
-	return bankSlips, nil
 }

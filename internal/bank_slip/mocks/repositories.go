@@ -1,6 +1,7 @@
 package bank_slip
 
 import (
+	"maps"
 	entities "performatic-file-processor/internal/bank_slip/entity"
 
 	"github.com/stretchr/testify/mock"
@@ -22,21 +23,22 @@ type BankSlipRepositoryMock struct {
 	mock.Mock
 }
 
-func (m *BankSlipRepositoryMock) GetExistingByDebitIds(debitIds []string) (map[entities.DebitId]entities.Existing, error) {
-	args := m.Called(debitIds)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+func (m *BankSlipRepositoryMock) InsertMany(bankSlips *entities.BankSlipMap) (map[entities.DebitId]entities.Success, error) {
+	copy := make(entities.BankSlipMap)
+	maps.Copy(copy, *bankSlips)
+	args := m.Called(&copy)
+	return args.Get(0).(map[entities.DebitId]entities.Success), args.Error(1)
+}
+
+func (m *BankSlipRepositoryMock) UpdateMany(bankSlips ...*entities.BankSlipMap) error {
+	copies := make([]*entities.BankSlipMap, len(bankSlips))
+	copy(copies, bankSlips)
+
+	dynamicArgs := make([]interface{}, len(copies))
+	for i, v := range copies {
+		dynamicArgs[i] = v
 	}
 
-	return args.Get(0).(map[entities.DebitId]entities.Existing), args.Error(1)
-}
-
-func (m *BankSlipRepositoryMock) InsertMany(bankSlips map[entities.DebitId]*entities.BankSlip) error {
-	args := m.Called(bankSlips)
-	return args.Error(0)
-}
-
-func (m *BankSlipRepositoryMock) UpdateMany(bankSlips map[entities.DebitId]*entities.BankSlip) error {
-	args := m.Called(bankSlips)
+	args := m.Called(dynamicArgs...)
 	return args.Error(0)
 }

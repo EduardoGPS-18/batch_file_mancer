@@ -357,3 +357,51 @@ func (suit *TestSuitReceiveUploadService) TestReceiveUploadService_ShouldSplitFi
 		})
 	}))
 }
+
+func (suit *TestSuitReceiveUploadService) TestReceiveUploadService_ShouldSplitFileToManyWorkersWhenHeadersIsLongAndRowContentIsLoggerAnotherCase() {
+	fileContent := bytes.NewBufferString("headerData,headerData\nrow1,row1,row1,row1,row1,row1\nrow2,row2,row2,row2\nrow3\nrow4,row4,row4").Bytes()
+	fileName := "testfile.txt"
+	file, fileHeaders, err := sharedMocks.CreateMultipartFileMock(fileName, fileContent)
+	if err != nil {
+		panic(err)
+	}
+
+	mockSavedFile := sharedMocks.NewSavedFileMock()
+	suit.mockBankSlipFileRepo.On("Insert", mock.Anything).Run(func(arg mock.Arguments) {
+		arg.Get(0).(*bankSlipEntities.BankSlipFileMetadata).ID = "any_id"
+	}).Return(nil).Once()
+	suit.mockMultipartFileHandler.On("SaveFile", mock.Anything).Return(mockSavedFile, nil).Once()
+	suit.mockMessageProducer.On("Publish", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	mockSavedFile.On("Open").Return(bytes.NewReader(fileContent)).Once()
+	mockSavedFile.On("Delete").Return(nil).Once()
+
+	err = suit.service.Execute(file, fileHeaders)
+	assert.NoError(suit.T(), err)
+
+	suit.mockBankSlipFileRepo.AssertCalled(suit.T(), "Insert", mock.MatchedBy(func(bankSlipFile *bankSlipEntities.BankSlipFileMetadata) bool {
+		return assert.Equal(suit.T(), fileName, bankSlipFile.FileName)
+	}))
+	suit.mockMultipartFileHandler.AssertCalled(suit.T(), "SaveFile", handler.NewMultipartFile(file, fileHeaders))
+	suit.mockMessageProducer.AssertNumberOfCalls(suit.T(), "Publish", 3)
+	suit.mockMessageProducer.AssertCalled(suit.T(), "Publish", mock.Anything, "rows-to-process", mock.MatchedBy(func(message map[string]any) bool {
+		return reflect.DeepEqual(message, map[string]any{
+			"data":   "row1,row1,row1,row1,row1,row1",
+			"fileId": "any_id",
+			"header": "headerData,headerData",
+		})
+	}))
+	suit.mockMessageProducer.AssertCalled(suit.T(), "Publish", mock.Anything, "rows-to-process", mock.MatchedBy(func(message map[string]any) bool {
+		return reflect.DeepEqual(message, map[string]any{
+			"data":   "row2,row2,row2,row2\nrow3",
+			"fileId": "any_id",
+			"header": "headerData,headerData",
+		})
+	}))
+	suit.mockMessageProducer.AssertCalled(suit.T(), "Publish", mock.Anything, "rows-to-process", mock.MatchedBy(func(message map[string]any) bool {
+		return reflect.DeepEqual(message, map[string]any{
+			"data":   "row4,row4,row4",
+			"fileId": "any_id",
+			"header": "headerData,headerData",
+		})
+	}))
+}

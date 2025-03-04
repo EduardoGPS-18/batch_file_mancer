@@ -126,13 +126,33 @@ func TestNewBankSlipFromRow_DebitDueDateError(t *testing.T) {
 	assert.Equal(t, errors.New("error converting debtDueDate to time.Time 2023-12-32 Position: 4"), err)
 }
 
-func TestUpdateRowToError(t *testing.T) {
+func TestUpdateRowToErrorGeneratingBilling(t *testing.T) {
 	debtDueDate, _ := time.Parse("2006-01-02", "2023-12-31")
 	bankSlip := newBankSlip(123, 1000.50, debtDueDate, "debt123", "John Doe", "john.doe@example.com", "file123", BankSlipStatusPending)
 
-	errorMessage := "Debt already exists"
-	bankSlip.UpdateRowToDuplicated()
+	errorMessage := "Any error"
+	bankSlip.ErrorGeneratingBilling(errorMessage)
 
-	assert.Equal(t, BankSlipStatusSuccess, bankSlip.Status)
+	assert.Equal(t, BankSlipStatusGenerateBillingError, bankSlip.Status)
 	assert.Equal(t, &errorMessage, bankSlip.ErrorMessage)
+}
+
+func TestUpdateRowToErrorSendingEmail(t *testing.T) {
+	debtDueDate, _ := time.Parse("2006-01-02", "2023-12-31")
+	bankSlip := newBankSlip(123, 1000.50, debtDueDate, "debt123", "John Doe", "john.doe@example.com", "file123", BankSlipStatusPending)
+
+	errorMessage := "Any error"
+	bankSlip.ErrorSendingEmail(errorMessage)
+
+	assert.Equal(t, BankSlipStatusSendingEmailError, bankSlip.Status)
+	assert.Equal(t, &errorMessage, bankSlip.ErrorMessage)
+}
+
+func TestUpdateRowToSuccess(t *testing.T) {
+	debtDueDate, _ := time.Parse("2006-01-02", "2023-12-31")
+	bankSlip := newBankSlip(123, 1000.50, debtDueDate, "debt123", "John Doe", "john.doe@example.com", "file123", BankSlipStatusPending)
+
+	bankSlip.Success()
+
+	assert.Equal(t, bankSlip.Status, BankSlipStatusSuccess)
 }

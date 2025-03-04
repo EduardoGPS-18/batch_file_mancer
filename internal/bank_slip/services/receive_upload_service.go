@@ -105,7 +105,9 @@ func (*ReceiveUploadService) readFileContent(locallyFile io.Reader, buffer []byt
 	for {
 		bytesRead, err := locallyFile.Read(buffer)
 		if bytesRead == 0 {
-			fileChannel <- Row{data: []byte(remainder), header: header}
+			if remainder != "" {
+				fileChannel <- Row{data: []byte(remainder), header: header}
+			}
 			break
 		}
 		if err != nil && err != io.EOF {
@@ -113,7 +115,7 @@ func (*ReceiveUploadService) readFileContent(locallyFile io.Reader, buffer []byt
 			break
 		}
 
-		str := string(buffer)
+		str := string(buffer[:bytesRead])
 
 		lastItemIndex := strings.LastIndex(str, "\n")
 		lastRemainingIndex := strings.LastIndex(remainder, "\n")
@@ -124,7 +126,9 @@ func (*ReceiveUploadService) readFileContent(locallyFile io.Reader, buffer []byt
 
 		fullRowsValid := remainder + str[:lastItemIndex]
 		if lastItemIndex == 0 {
-			fullRowsValid = remainder + str
+			fullRowsValid := remainder + str
+			fileChannel <- Row{data: []byte(fullRowsValid), header: header}
+			break
 		}
 		fileChannel <- Row{data: []byte(fullRowsValid), header: header}
 		remainder = str[lastItemIndex+1:]
