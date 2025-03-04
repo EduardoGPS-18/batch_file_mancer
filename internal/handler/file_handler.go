@@ -11,6 +11,7 @@ type File interface {
 type SavedFile interface {
 	Delete()
 	Open() io.Reader
+	Filepath() string
 }
 
 type FileHandler interface {

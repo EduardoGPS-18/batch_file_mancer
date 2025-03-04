@@ -25,8 +25,7 @@ func NewBankSlipRowsConsumer(
 	}
 }
 
-func (s *BankSlipRowsConsumer) Execute(ctx context.Context) {
-	messagesChannel := make(chan messaging.Message)
+func (s *BankSlipRowsConsumer) Execute(ctx context.Context, messagesChannel chan messaging.Message) {
 
 	for range s.processors {
 		go s.processBankSlipRowsService.Execute(ctx, messagesChannel)
@@ -38,6 +37,7 @@ func (s *BankSlipRowsConsumer) Execute(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			log.Println("Exiting BankSlipRowsConsumer...")
+			return
 		default:
 			message, err := s.messageConsumer.Consume(ctx, "rows-to-process")
 			if err != nil {

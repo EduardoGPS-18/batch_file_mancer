@@ -83,7 +83,7 @@ func (m *MessageConsumerMock) SubscribeInTopic(ctx context.Context, topic string
 func (m *MessageConsumerMock) Consume(ctx context.Context, topic string) (messaging.Message, error) {
 	args := m.Called(ctx, topic)
 
-	if args.Get(0) != nil {
+	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 

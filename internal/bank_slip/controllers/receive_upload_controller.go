@@ -20,7 +20,7 @@ func NewReceiveUploadController(
 func (controller *ReceiveUploadController) UploadBankSlipFileHandler(w http.ResponseWriter, r *http.Request) {
 	multpartFile, handler, err := r.FormFile("file")
 	if err != nil {
-		log.Fatalf("Erro ao obter arquivo multipart: %v\n", err)
+		log.Printf("Erro ao obter arquivo multipart: %v\n", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		errObj, _ := json.Marshal(map[string]string{"error": "Erro ao obter arquivo!"})
 		w.Write(errObj)

@@ -23,3 +23,7 @@ func (s *OsFile) Delete() {
 func (s *OsFile) Open() io.Reader {
 	return s.file
 }
+
+func (s *OsFile) Filepath() string {
+	return s.file.Name()
+}

@@ -28,5 +28,5 @@ func (s *ReceiveUploadServiceMock) Execute(
 	fileHeader *multipart.FileHeader,
 ) error {
 	args := s.Called()
-	return args.Error(1)
+	return args.Error(0)
 }

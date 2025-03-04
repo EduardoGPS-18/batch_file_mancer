@@ -38,10 +38,18 @@ func (r *BankSlipPgRepository) InsertMany(bankSlips map[entities.DebitId]*entiti
 	return nil
 }
 
-func (r *BankSlipPgRepository) GetExistingByDebitIds(debitIds []string) (map[entities.DebitId]entities.Existing, error) {
-	joinedDebitIds := strings.Join(debitIds, ",")
+func (r *BankSlipPgRepository) GetExistingByDebitIds(debtIds []string) (map[entities.DebitId]entities.Existing, error) {
+	quotedDebitIds := make([]string, len(debtIds))
+	args := make([]any, len(debtIds))
+	for i, id := range debtIds {
+		quotedDebitIds[i] = fmt.Sprintf("$%d", i+1)
+		args[i] = id
+	}
+
+	joinedDebitIds := strings.Join(quotedDebitIds, ", ")
 	selectQuery := fmt.Sprintf("SELECT debt_id FROM bank_slip WHERE debt_id IN (%s)", joinedDebitIds)
-	rows, err := r.db.Query(selectQuery)
+
+	rows, err := r.db.Query(selectQuery, args...)
 	if err != nil {
 		return nil, err
 	}

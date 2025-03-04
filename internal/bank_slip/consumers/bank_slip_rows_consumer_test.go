@@ -2,38 +2,33 @@ package bank_slip
 
 import (
 	"context"
+	"sync"
 	"testing"
+	"time"
 
 	bankSlipMocks "performatic-file-processor/internal/bank_slip/mocks"
 	"performatic-file-processor/internal/messaging"
 	"performatic-file-processor/internal/mocks"
-	sharedMocks "performatic-file-processor/internal/mocks"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 )
 
 type TestSuitBankSlipRowsConsumer struct {
 	suite.Suite
-	mockBankSlipRepo         *bankSlipMocks.BankSlipRepositoryMock
-	mockBankSlipFileRepo     *bankSlipMocks.BankSlipFileMetadataRepositoryMock
-	mockMultipartFileHandler *sharedMocks.FileHandlerMock
-	mockMessageProducer      *sharedMocks.MessageProducerMock
-	service                  *ReceiveUploadService
+	mockMessageConsumer            *mocks.MessageConsumerMock
+	mockProcessBankSlipRowsService *bankSlipMocks.ProcessBankSlipRowsServiceMock
+	consumer                       *BankSlipRowsConsumer
 }
 
 func (testSuit *TestSuitBankSlipRowsConsumer) SetupTest() {
-	testSuit.mockBankSlipRepo = new(bankSlipMocks.BankSlipRepositoryMock)
-	testSuit.mockBankSlipFileRepo = new(bankSlipMocks.BankSlipFileMetadataRepositoryMock)
-	testSuit.mockMultipartFileHandler = new(sharedMocks.FileHandlerMock)
-	testSuit.mockMessageProducer = new(sharedMocks.MessageProducerMock)
+	testSuit.mockMessageConsumer = new(mocks.MessageConsumerMock)
+	testSuit.mockProcessBankSlipRowsService = new(bankSlipMocks.ProcessBankSlipRowsServiceMock)
 
-	testSuit.service = NewReceiveUploadService(
-		testSuit.mockBankSlipRepo,
-		testSuit.mockBankSlipFileRepo,
-		testSuit.mockMultipartFileHandler,
-		testSuit.mockMessageProducer,
-		len("headerData"),
+	testSuit.consumer = NewBankSlipRowsConsumer(
+		testSuit.mockProcessBankSlipRowsService,
+		testSuit.mockMessageConsumer,
 		2,
 	)
 }
@@ -41,44 +36,57 @@ func (testSuit *TestSuitBankSlipRowsConsumer) SetupTest() {
 func TestReceiveUploadService(t *testing.T) {
 	suite.Run(t, new(TestSuitBankSlipRowsConsumer))
 }
-func (testSuit *TestSuitBankSlipRowsConsumer) TestExecuteSuccess() {
-	mockMessageConsumer := new(mocks.MessageConsumerMock)
-	mockProcessBankSlipRowsService := new(bankSlipMocks.ProcessBankSlipRowsServiceMock)
 
-	consumer := NewBankSlipRowsConsumer(
-		mockProcessBankSlipRowsService,
-		mockMessageConsumer,
-		2,
-	)
-
+func (s *TestSuitBankSlipRowsConsumer) TestBankSlipRowsConsumer_ShouldSendMessageToBeProcessed() {
 	mockMessage := mocks.NewMessageMock()
 
-	mockMessageConsumer.On("SubscribeInTopic", mock.Anything, "rows-to-process").Return(nil)
-	mockMessageConsumer.On("Consume", mock.Anything, "rows-to-process").Return(mockMessage, nil).Once()
+	s.mockMessageConsumer.On("SubscribeInTopic", mock.Anything, "rows-to-process").Return(nil)
+	s.mockMessageConsumer.On("Consume", mock.Anything, mock.Anything).Return(mockMessage, nil)
 
-	mockProcessBankSlipRowsService.On("Execute", mock.Anything, mock.Anything).Return(nil).Once()
+	s.mockProcessBankSlipRowsService.On("Execute", mock.Anything, mock.Anything).Return(nil).Twice()
 
-	go consumer.Execute()
+	ctx, _ := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	chann := make(chan messaging.Message)
 
-	mockMessageConsumer.AssertExpectations(testSuit.T())
-	mockProcessBankSlipRowsService.AssertExpectations(testSuit.T())
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s.consumer.Execute(ctx, chann)
+	}()
+	time.Sleep(200 * time.Millisecond)
+	msg := <-chann
+	ctx.Done()
+
+	s.mockMessageConsumer.AssertCalled(s.T(), "Consume", ctx, "rows-to-process")
+	s.mockProcessBankSlipRowsService.AssertNumberOfCalls(s.T(), "Execute", 2)
+
+	s.Equal(mockMessage, msg)
 }
 
-func (testSuit *TestSuitBankSlipRowsConsumer) TestExecuteConsumeError() {
-	mockMessageConsumer := new(sharedMocks.MessageConsumerMock)
-	mockProcessBankSlipRowsService := new(bankSlipMocks.ProcessBankSlipRowsServiceMock)
+func (s *TestSuitBankSlipRowsConsumer) TestBankSlipRowsConsumer_ShouldIgnoreWhenConsumerReturnsError() {
+	s.mockMessageConsumer.On("SubscribeInTopic", mock.Anything, "rows-to-process").Return(nil)
+	s.mockMessageConsumer.On("Consume", mock.Anything, mock.Anything).Return(nil, assert.AnError)
 
-	consumer := NewBankSlipRowsConsumer(
-		mockProcessBankSlipRowsService,
-		mockMessageConsumer,
-		2,
-	)
+	s.mockProcessBankSlipRowsService.On("Execute", mock.Anything, mock.Anything).Return(nil).Twice()
 
-	mockMessageConsumer.On("SubscribeInTopic", mock.Anything, "rows-to-process").Return(nil)
-	mockMessageConsumer.On("Consume", mock.Anything, "rows-to-process").Return(messaging.Message{}, context.Canceled).Once()
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	chann := make(chan messaging.Message)
 
-	go consumer.Execute()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s.consumer.Execute(ctx, chann)
+	}()
+	wg.Wait()
 
-	mockMessageConsumer.AssertExpectations(testSuit.T())
-	mockProcessBankSlipRowsService.AssertExpectations(testSuit.T())
+	s.mockMessageConsumer.AssertCalled(s.T(), "Consume", mock.Anything, "rows-to-process")
+	s.mockProcessBankSlipRowsService.AssertNumberOfCalls(s.T(), "Execute", 2)
+	select {
+	case <-chann:
+		s.T().Error("O canal deveria estar vazio, mas recebeu uma mensagem inesperada")
+	default:
+	}
 }

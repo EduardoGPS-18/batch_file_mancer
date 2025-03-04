@@ -107,6 +107,11 @@ func (m *SavedFileMock) Open() io.Reader {
 	return args.Get(0).(io.Reader)
 }
 
+func (m *SavedFileMock) Filepath() string {
+	args := m.Called()
+	return args.Get(0).(string)
+}
+
 type ReaderMock struct {
 	mock.Mock
 }
