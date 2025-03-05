@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"os"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/google/uuid"
@@ -15,8 +16,10 @@ type KafkaProducerImpl struct {
 }
 
 func NewKafkaProducer() *KafkaProducerImpl {
+	var bootstrapServers = os.Getenv("KAFKA_BOOTSTRAP_SERVERS")
 	p, err := kafka.NewProducer(&kafka.ConfigMap{
-		"bootstrap.servers": "localhost:9092"})
+		"bootstrap.servers": bootstrapServers,
+	})
 	if err != nil {
 		log.Fatalf("Erro ao criar produtor: %v\n", err)
 	}

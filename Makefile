@@ -41,6 +41,11 @@ docker-down:
 test:
 	@echo "Testing..."
 	@go test ./cmd/... ./internal/... -v
+
+etest:
+	@echo "Testing..."
+	@go test -timeout 1m ./tests/e2e/... -v
+
 # Integrations Tests for the application
 itest:
 	@echo "Running integration tests..."

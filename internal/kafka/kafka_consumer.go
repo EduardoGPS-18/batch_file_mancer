@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"log"
+	"os"
 	"performatic-file-processor/internal/messaging"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
@@ -12,9 +13,8 @@ type KafkaConsumer struct {
 	kafkaConsumer *kafka.Consumer
 }
 
-var bootstrapServers = "localhost:9092"
-
 func NewKafkaConsumer() *KafkaConsumer {
+	var bootstrapServers = os.Getenv("KAFKA_BOOTSTRAP_SERVERS")
 	kafkaConsumer, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":  bootstrapServers,
 		"group.id":           "file-processor-group",
@@ -31,6 +31,7 @@ func NewKafkaConsumer() *KafkaConsumer {
 }
 
 func (k *KafkaConsumer) SubscribeInTopic(ctx context.Context, topic string) error {
+	var bootstrapServers = os.Getenv("KAFKA_BOOTSTRAP_SERVERS")
 	err := k.kafkaConsumer.SubscribeTopics([]string{topic}, nil)
 	if err != nil {
 		log.Fatalf("Erro ao se inscrever no tópico: %v\n", err)
@@ -58,8 +59,11 @@ func (k *KafkaConsumer) SubscribeInTopic(ctx context.Context, topic string) erro
 }
 
 func (k *KafkaConsumer) Consume(ctx context.Context, topic string) (messaging.Message, error) {
-	message, err := k.kafkaConsumer.ReadMessage(-1)
+	message, err := k.kafkaConsumer.ReadMessage(1)
 	if err != nil {
+		if err.(kafka.Error).Code() == kafka.ErrTimedOut {
+			return nil, err
+		}
 		panic(err)
 	}
 
