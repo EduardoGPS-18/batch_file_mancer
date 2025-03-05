@@ -63,7 +63,7 @@ func TestNewBankSlipFromRow_FileMetadataIsEmpty(t *testing.T) {
 	bankSlip, err := NewBankSlipFromRow(fileMetadataId, data, header)
 	assert.Error(t, err)
 	assert.Nil(t, bankSlip)
-	assert.Equal(t, errors.New("error rowItems and headerItems length are different"), err)
+	assert.Equal(t, errors.New("error rowItems and headerItems length are different (file id: file123)"), err)
 }
 
 func TestNewBankSlipFromRow_RowIsEmpty(t *testing.T) {
@@ -75,7 +75,7 @@ func TestNewBankSlipFromRow_RowIsEmpty(t *testing.T) {
 	bankSlip, err := NewBankSlipFromRow(fileMetadataId, data, header)
 	assert.Error(t, err)
 	assert.Nil(t, bankSlip)
-	assert.Equal(t, errors.New("error is missing some field"), err)
+	assert.Equal(t, errors.New("error is missing some field (file id: file123)"), err)
 }
 
 func TestNewBankSlipFromRow_SomeFieldNotProvidedError(t *testing.T) {
@@ -89,7 +89,7 @@ func TestNewBankSlipFromRow_SomeFieldNotProvidedError(t *testing.T) {
 		bankSlip, err := NewBankSlipFromRow(fileMetadataId, data, headerWithoutField)
 		assert.Error(t, err)
 		assert.Nil(t, bankSlip)
-		assert.Equal(t, errors.New("error is missing some field"), err)
+		assert.Equal(t, errors.New("error is missing some field (file id: file123)"), err)
 	}
 }
 
@@ -101,7 +101,7 @@ func TestNewBankSlipFromRow_InvalidGovernmentIdError(t *testing.T) {
 	bankSlip, err := NewBankSlipFromRow(fileMetadataId, data, header)
 	assert.Error(t, err)
 	assert.Nil(t, bankSlip)
-	assert.Equal(t, errors.New("error converting governmentId to int abc Position: 1"), err)
+	assert.Equal(t, errors.New("error converting governmentId to int abc Position: 1 (file id: file123)"), err)
 }
 
 func TestNewBankSlipFromRow_DebitAmountError(t *testing.T) {
@@ -112,7 +112,7 @@ func TestNewBankSlipFromRow_DebitAmountError(t *testing.T) {
 	bankSlip, err := NewBankSlipFromRow(fileMetadataId, data, header)
 	assert.Error(t, err)
 	assert.Nil(t, bankSlip)
-	assert.Equal(t, errors.New("error converting debtAmount to float64 cde Position: 3"), err)
+	assert.Equal(t, errors.New("error converting debtAmount to float64 cde Position: 3 (file id: file123)"), err)
 }
 
 func TestNewBankSlipFromRow_DebitDueDateError(t *testing.T) {
@@ -123,7 +123,7 @@ func TestNewBankSlipFromRow_DebitDueDateError(t *testing.T) {
 	bankSlip, err := NewBankSlipFromRow(fileMetadataId, data, header)
 	assert.Error(t, err)
 	assert.Nil(t, bankSlip)
-	assert.Equal(t, errors.New("error converting debtDueDate to time.Time 2023-12-32 Position: 4"), err)
+	assert.Equal(t, errors.New("error converting debtDueDate to time.Time 2023-12-32 Position: 4 (file id: file123)"), err)
 }
 
 func TestUpdateRowToErrorGeneratingBilling(t *testing.T) {

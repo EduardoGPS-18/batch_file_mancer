@@ -3,7 +3,6 @@ package bank_slip
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"mime/multipart"
@@ -57,6 +56,8 @@ func (s *ReceiveUploadService) Execute(file multipart.File, fileHeader *multipar
 
 	bankSlipFile := bankSlipEntities.NewBankSlipFileMetadata(fileHeader.Filename)
 
+	log.Printf("Receiving file... (id: %s)", bankSlipFile.ID)
+
 	err := s.bankSlipFileMetadataRepository.Insert(bankSlipFile)
 	if err != nil {
 		return err
@@ -85,7 +86,7 @@ func (s *ReceiveUploadService) Execute(file multipart.File, fileHeader *multipar
 	if header == "" {
 		close(fileChannel)
 		elapsed := time.Since(start)
-		fmt.Printf("Time taken: %s\n", elapsed)
+		log.Printf("Time taken: %s\n", elapsed)
 		return errors.New("header not found")
 	}
 
@@ -96,7 +97,7 @@ func (s *ReceiveUploadService) Execute(file multipart.File, fileHeader *multipar
 	wg.Wait()
 
 	elapsed := time.Since(start)
-	fmt.Printf("Time taken: %s\n", elapsed)
+	log.Printf("Time taken: %s\n", elapsed)
 	return nil
 }
 
@@ -173,6 +174,7 @@ func (f *ReceiveUploadService) processFile(worker int, fileChannel chan Row, fil
 
 		message := map[string]any{"data": string(row.data), "header": row.header, "fileId": fileId}
 
+		log.Printf("Posting message to kafka for file %s (%d bytes)", fileId, len(row.data))
 		err := f.messageProducer.Publish(context.TODO(), "rows-to-process", message)
 		if err != nil {
 			log.Print("Error posting message", err)

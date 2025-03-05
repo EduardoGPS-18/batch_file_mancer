@@ -1,7 +1,6 @@
 package bank_slip
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -54,7 +53,7 @@ func newBankSlip(governmentId int, debtAmount float64, debtDueDate time.Time, de
 	}
 }
 
-func NewBankSlipFromRow(fileMetadataId, data, header string) (*BankSlip, error) {
+func NewBankSlipFromRow(fileId, data, header string) (*BankSlip, error) {
 	rowItems := strings.Split(data, ",")
 	headerItems := strings.Split(header, ",")
 
@@ -65,27 +64,27 @@ func NewBankSlipFromRow(fileMetadataId, data, header string) (*BankSlip, error) 
 	dueDatePosition := slices.IndexFunc(headerItems, func(s string) bool { return strings.Contains(s, "debtDueDate") })
 	debtIdPosition := slices.IndexFunc(headerItems, func(s string) bool { return strings.Contains(s, "debtId") })
 
-	if len(fileMetadataId) == 0 {
-		return nil, errors.New("file metadata must be not empty")
+	if len(fileId) == 0 {
+		return nil, fmt.Errorf("file metadata must be not empty")
 	}
 	someVariableIsMissing := governmentIdPosition == -1 || userNamePosition == -1 || emailPosition == -1 || amountPosition == -1 || dueDatePosition == -1 || debtIdPosition == -1
 	if someVariableIsMissing {
-		return nil, errors.New("error is missing some field")
+		return nil, fmt.Errorf("error is missing some field (file id: %s)", fileId)
 	}
 	if len(rowItems) != len(headerItems) {
-		return nil, errors.New("error rowItems and headerItems length are different")
+		return nil, fmt.Errorf("error rowItems and headerItems length are different (file id: %s)", fileId)
 	}
 	governmentId, err := strconv.Atoi(rowItems[governmentIdPosition])
 	if err != nil {
-		return nil, errors.New("error converting governmentId to int " + string(rowItems[governmentIdPosition]) + " Position: " + fmt.Sprint(governmentIdPosition))
+		return nil, fmt.Errorf("error converting governmentId to int %s Position: %s (file id: %s)", string(rowItems[governmentIdPosition]), fmt.Sprint(governmentIdPosition), fileId)
 	}
 	debtAmount, err := strconv.ParseFloat(rowItems[amountPosition], 64)
 	if err != nil {
-		return nil, errors.New("error converting debtAmount to float64 " + string(rowItems[amountPosition]) + " Position: " + fmt.Sprint(amountPosition))
+		return nil, fmt.Errorf("error converting debtAmount to float64 %s Position: %s (file id: %s)", string(rowItems[amountPosition]), fmt.Sprint(amountPosition), fileId)
 	}
 	debtDueDate, err := time.Parse("2006-01-02", rowItems[dueDatePosition])
 	if err != nil {
-		return nil, errors.New("error converting debtDueDate to time.Time " + string(rowItems[dueDatePosition]) + " Position: " + fmt.Sprint(dueDatePosition))
+		return nil, fmt.Errorf("error converting debtDueDate to time.Time %s Position: %s (file id: %s)", string(rowItems[dueDatePosition]), fmt.Sprint(dueDatePosition), fileId)
 	}
 
 	return newBankSlip(
@@ -95,7 +94,7 @@ func NewBankSlipFromRow(fileMetadataId, data, header string) (*BankSlip, error) 
 		rowItems[debtIdPosition],
 		rowItems[userNamePosition],
 		rowItems[emailPosition],
-		fileMetadataId,
+		fileId,
 		BankSlipStatusPending,
 	), nil
 }

@@ -59,7 +59,7 @@ func (f *ContainerFactory) MakeDBContainer() testcontainers.Container {
 		log.Fatalf("Error getting host for PostgreSQL: %v", err)
 	}
 	os.Setenv("DB_HOST", dbHost)
-	fmt.Printf("PostgreSQL is running on port: %s\n", os.Getenv("DB_PORT"))
+	log.Printf("PostgreSQL is running on port: %s\n", os.Getenv("DB_PORT"))
 
 	dbInstance := database.GetInstance()
 
@@ -129,6 +129,6 @@ func (f *ContainerFactory) MakeKafkaLandoopContainer() testcontainers.Container 
 	}
 	os.Setenv("KAFKA_BOOTSTRAP_SERVERS", fmt.Sprintf("%s:%s", kafkaHost, kafkaPort.Port()))
 
-	fmt.Printf("Kafka is running on port: %s\n", os.Getenv("KAFKA_BOOTSTRAP_SERVERS"))
+	log.Printf("Kafka is running on port: %s\n", os.Getenv("KAFKA_BOOTSTRAP_SERVERS"))
 	return kafkaContainer
 }

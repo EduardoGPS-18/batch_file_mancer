@@ -2,7 +2,6 @@ package bank_slip
 
 import (
 	"context"
-	"fmt"
 	"log"
 	bankSlipEntities "performatic-file-processor/internal/bank_slip/entity"
 	bankSlipProviders "performatic-file-processor/internal/bank_slip/providers"
@@ -35,7 +34,7 @@ func NewProcessBankSlipRowsService(
 func (s *ProcessBankSlipRowsService) Execute(context context.Context, messagesChannel chan messaging.Message) {
 	select {
 	case <-context.Done():
-		log.Printf("Exiting ProcessBankSlipRowsService\n")
+		log.Printf("Exiting ProcessBankSlipRowsService...\n")
 		return
 
 	default:
@@ -44,7 +43,7 @@ func (s *ProcessBankSlipRowsService) Execute(context context.Context, messagesCh
 			fileData, fileHeader, fileId, err := s.getFieldsFromMessage(message)
 
 			if err != nil {
-				log.Printf("Error getting fields from message: %v\n", err)
+				log.Printf("Error getting fields from message (file id: %s): %v\n", fileId, err)
 				continue
 			}
 
@@ -53,20 +52,21 @@ func (s *ProcessBankSlipRowsService) Execute(context context.Context, messagesCh
 			totalExpected := 0
 			for row := range strings.SplitSeq(fileData, "\n") {
 				if row == "" {
+					log.Printf("Empty row for file %s\n", fileId)
 					continue
 				}
 
 				totalExpected++
 				bankSlip, err := bankSlipEntities.NewBankSlipFromRow(fileId, row, fileHeader)
 				if err != nil {
-					fmt.Printf("Error creating Bank Slip Data: %v\n", err)
+					log.Printf("Error creating Bank Slip Data (file id: %s): %v\n", fileId, err)
 					continue
 				}
 				bankSlips[bankSlip.DebtId] = bankSlip
 			}
 
 			if len(bankSlips) <= 0 {
-				fmt.Print("No new debts to insert\n")
+				log.Printf("No new debts to insert %s\n", fileId)
 				continue
 			}
 
@@ -79,7 +79,7 @@ func (s *ProcessBankSlipRowsService) Execute(context context.Context, messagesCh
 			}
 
 			if err != nil {
-				fmt.Printf("Error inserting new debts: %v\n", err.Error())
+				log.Printf("Error inserting new debts (file id: %s): %v\n", fileId, err.Error())
 				continue
 			}
 
@@ -88,12 +88,12 @@ func (s *ProcessBankSlipRowsService) Execute(context context.Context, messagesCh
 			err = s.bankSlipRepository.UpdateMany(&bankSlips, debitsWithErrors)
 
 			if err != nil {
-				fmt.Printf("Error inserting new debts: %v\n", err.Error())
+				log.Printf("Error inserting new debts (file id: %s): %v\n", fileId, err.Error())
 				continue
 			}
 
 			message.Commit()
-			log.Printf("From %d inserted %d new debts\n", totalExpected, len(bankSlips))
+			log.Printf("From %d inserted %d new debts (file id: %s)\n", totalExpected, len(bankSlips), fileId)
 		}
 	}
 }

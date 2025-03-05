@@ -8,7 +8,7 @@ build:
 	
 	
 	@go build -o ./build/main cmd/api/main.go
-	@go build -o ./build/workers cmd/workers/main.go
+	@go build -o ./build/worker cmd/workers/main.go
 
 # Run the application
 run-api:
