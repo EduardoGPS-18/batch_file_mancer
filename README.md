@@ -41,6 +41,8 @@ $ curl --location 'http://<host (default: localhost)>:<port (default: 8080)/uplo
     --form 'file=@"<path_arquivo>.csv"'
 ```
 
+Não foi implementado formas de acompanhar o upload e o processamento do arquivo, então é necessário verificar diretamente no banco de dados.
+
 ## Testes
 
 ### Dependências
