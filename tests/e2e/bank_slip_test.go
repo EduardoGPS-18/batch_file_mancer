@@ -3,7 +3,9 @@ package e2e
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -16,22 +18,44 @@ import (
 	"testing"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/julienschmidt/httprouter"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
+	"github.com/testcontainers/testcontainers-go"
 )
 
-func TestUploadBankSlipFileHandler(t *testing.T) {
+type BankSlipTestE2ESuite struct {
+	suite.Suite
+	kafkaContainer testcontainers.Container
+	dbContainer    testcontainers.Container
+	dbInstance     *sql.DB
+}
 
-	containerFactory := sharedTestHelpers.NewContainerFactory(t.Context())
+func TestBankSlipE2eRunSuite(t *testing.T) {
+	suite.Run(t, new(BankSlipTestE2ESuite))
+}
 
-	kafkaContainer := containerFactory.MakeKafkaLandoopContainer()
-	dbContainer := containerFactory.MakeDBContainer()
+func (f *BankSlipTestE2ESuite) SetupSuite() {
+	err := godotenv.Load("../../.env")
+	if err != nil {
+		log.Fatalf("Error loading .env file")
+	}
 
-	defer kafkaContainer.Terminate(t.Context())
-	defer dbContainer.Terminate(t.Context())
-
+	containerFactory := sharedTestHelpers.NewContainerFactory(f.T().Context())
 	dbInstance := database.GetInstance()
 
+	f.dbContainer = containerFactory.MakeDBContainer()
+	f.kafkaContainer = containerFactory.MakeKafkaLandoopContainer()
+	f.dbInstance = dbInstance
+}
+
+func (f *BankSlipTestE2ESuite) TearDownTest() {
+	defer f.kafkaContainer.Terminate(f.T().Context())
+	defer f.dbContainer.Terminate(f.T().Context())
+}
+
+func (f *BankSlipTestE2ESuite) TestBankSlipE2eRunSuite_UploadFileAndProcessRows() {
 	router := httprouter.New()
 	bankSlipRoutes.RegisterRoutes(router)
 
@@ -43,19 +67,19 @@ func TestUploadBankSlipFileHandler(t *testing.T) {
 	body := new(bytes.Buffer)
 	writer := multipart.NewWriter(body)
 
-	file, err := os.Open("../data/test_file.csv")
+	file, err := os.Open("./data/test_file.csv")
 	if err != nil {
-		t.Fatal(err)
+		f.T().Fatal(err)
 	}
 
-	assert.NoError(t, err)
+	assert.NoError(f.T(), err)
 	defer file.Close()
 
 	part, err := writer.CreateFormFile("file", filepath.Base(file.Name()))
-	assert.NoError(t, err)
+	assert.NoError(f.T(), err)
 
 	_, err = io.Copy(part, file)
-	assert.NoError(t, err)
+	assert.NoError(f.T(), err)
 	writer.Close()
 
 	req := httptest.NewRequest(http.MethodPost, "/upload/bank-slip/file", body)
@@ -65,17 +89,17 @@ func TestUploadBankSlipFileHandler(t *testing.T) {
 
 	router.ServeHTTP(rr, req)
 
-	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(f.T(), http.StatusOK, rr.Code)
 
 	retries := 0
 	for {
 		time.Sleep(3 * time.Second)
 		if retries == 10 {
-			t.Fatal("Timeout waiting for bank slip processing")
+			f.T().Fatal("Timeout waiting for bank slip processing")
 		}
-		queryRes, err := dbInstance.Query("select user_name, government_id, user_email, debt_amount, debt_due_date, debt_id from bank_slip;")
+		queryRes, err := f.dbInstance.Query("select user_name, government_id, user_email, debt_amount, debt_due_date, debt_id from bank_slip;")
 		if err != nil {
-			t.Fatal(err)
+			f.T().Fatal(err)
 		}
 
 		found := false
@@ -85,14 +109,14 @@ func TestUploadBankSlipFileHandler(t *testing.T) {
 			var debtDueDate time.Time
 			err = queryRes.Scan(&name, &governmentId, &email, &debtAmount, &debtDueDate, &debtId)
 			if err != nil {
-				t.Fatal(err)
+				f.T().Fatal(err)
 			}
-			assert.Equal(t, "Elijah Santos", name)
-			assert.Equal(t, "9558", governmentId)
-			assert.Equal(t, "janet95@example.com", email)
-			assert.Equal(t, 7811.0, debtAmount)
-			assert.Equal(t, time.Date(2024, 1, 19, 0, 0, 0, 0, time.UTC), debtDueDate)
-			assert.Equal(t, "ea23f2ca-663a-4266-a742-9da4c9f4fcb3", debtId)
+			assert.Equal(f.T(), "Elijah Santos", name)
+			assert.Equal(f.T(), "9558", governmentId)
+			assert.Equal(f.T(), "janet95@example.com", email)
+			assert.Equal(f.T(), 7811.0, debtAmount)
+			assert.Equal(f.T(), time.Date(2024, 1, 19, 0, 0, 0, 0, time.UTC), debtDueDate)
+			assert.Equal(f.T(), "ea23f2ca-663a-4266-a742-9da4c9f4fcb3", debtId)
 			found = true
 		}
 		if found {
