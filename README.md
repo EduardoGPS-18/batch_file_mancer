@@ -1,53 +1,69 @@
-# Project performatic-file-processor
+# Projeto: File Processor
 
-One Paragraph of project description goes here
+Este projeto é uma solução de processamento de arquivos com integração a **Kafka** e **PostgreSQL**. Ele foi projetado para ser executado em containers, utilizando gerenciadores de container (como **Docker** ou **Podman**).
 
-## Getting Started
+## Requisitos
 
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. See deployment for notes on how to deploy the project on a live system.
+Antes de começar, verifique se você tem os seguintes requisitos:
 
-## MakeFile
+- **Docker**, **Podman** ou **Outro gerenciador** instalados no seu sistema.
+- **Docker Compose** (para Docker) ou uma alternativa compatível com o Podman para orquestrar os containers.
 
-Run build make command with tests
-```bash
-make all
+## Inicialização
+
+Para iniciar o projeto, siga estas etapas:
+
+0. (Caso for executar local) Configurar o arquivo `.env` com as variáveis de ambiente necessárias.
+
+```
+$ cp .env.example .env
 ```
 
-Build the application
+1. Executar o docker compose para subir as dependências do projeto:
+
 ```bash
-make build
+$ docker compose up -d
 ```
 
-Run the application
+2. Executar as migrações do banco de dados:
+
 ```bash
-make run
-```
-Create DB container
-```bash
-make docker-run
+$ docker cp ./db/migration.sql file-processor-db:/tmp/migration.sql
+$ docker exec -it file-processor-db psql -U postgres -d fileprocessor -f ./tmp/migration.sql
 ```
 
-Shutdown DB Container
+## Utilização
+
+Para utilizar o projeto, é disponibilizado uma API Rest para o envio do arquivo.
+
 ```bash
-make docker-down
+$ curl --location 'http://<host (default: localhost)>:<port (default: 8080)/upload/bank-slip/file' \
+    --form 'file=@"<path_arquivo>.csv"'
 ```
 
-DB Integrations Test:
+## Testes
+
+Foram implementados três níveis de testes:
+
+1. **Unitários**: Testes unitários para as funções de processamento de arquivos.
+   1.1 Para executar, execute o comando:
+
 ```bash
-make itest
+$ make test
 ```
 
-Live reload the application:
+2. **Integração**: Testes de integração para teste das queries.
+   1.1 Depende do **banco de dados**, para executar os testes de integração
+   1.2 Para executar, execute o comando:
+
 ```bash
-make watch
+$ make itest
 ```
 
-Run the test suite:
-```bash
-make test
-```
+3. **E2E**: Testes de ponta a ponta todo o fluxo principal da aplicação.
+   1.1 Depende do **banco de dados** e do **kafka**, para executar os testes e2e
+   1.2 Para executar, execute o comando:
 
-Clean up binary from the last build:
 ```bash
-make clean
+$ make etest
 ```
