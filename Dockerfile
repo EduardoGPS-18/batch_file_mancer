@@ -1,4 +1,4 @@
-FROM golang:1.20 AS builder
+FROM golang:1.24.0 AS builder
 
 WORKDIR /app
 
@@ -7,20 +7,35 @@ RUN go mod download
 
 COPY . .
 
-RUN go build -o /app/bin/performatic-file-processor
+RUN make build
 
 FROM alpine:latest AS api
 
+ENV PORT=8080
+ENV APP_ENV="local"
+ENV DB_HOST="file-processor-db"
+ENV DB_PORT=5432
+ENV DB_DATABASE="fileprocessor"
+ENV DB_PASSWORD="postgres"
+ENV DB_USERNAME="postgres"
+ENV DB_SCHEMA="public"
+ENV KAFKA_BOOTSTRAP_SERVERS="landoop-kafka:9092"
+
 WORKDIR /root/
 
-COPY --from=builder /app/bin/performatic-file-processor .
+COPY --from=builder /app/bin/main .
+COPY --from=builder /app/bin/worker .
 
-CMD ["./build/main"]
+RUN chmod +x /root/main
 
-FROM alpine:latest AS worker
+RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache libc6-compat
 
-WORKDIR /root/
 
-COPY --from=builder /app/bin/performatic-file-processor .
+RUN wget https://github.com/jwilder/dockerize/releases/download/v0.6.1/dockerize-linux-amd64-v0.6.1.tar.gz && \
+  tar -xzvf dockerize-linux-amd64-v0.6.1.tar.gz && \
+  mv dockerize /usr/local/bin/
 
-CMD ["./build/worker"]
+
+EXPOSE 8080
+# CMD in docker compose

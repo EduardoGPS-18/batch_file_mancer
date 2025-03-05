@@ -19,7 +19,7 @@ func NewBankSlipFactory() *BankSlipFactory {
 	return &BankSlipFactory{}
 }
 
-func (f *BankSlipFactory) MakeReceiveUploadService() *bankSlipControllers.ReceiveUploadController {
+func (f *BankSlipFactory) MakeReceiveUploadController() *bankSlipControllers.ReceiveUploadController {
 	db := database.GetInstance()
 
 	bankSlipFileRepository := bankSlipRepositories.NewBankSlipFilePgRepository(db)

@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"performatic-file-processor/internal/messaging"
@@ -15,6 +16,7 @@ type KafkaConsumer struct {
 
 func NewKafkaConsumer() *KafkaConsumer {
 	var bootstrapServers = os.Getenv("KAFKA_BOOTSTRAP_SERVERS")
+	fmt.Println("Kafka server: " + bootstrapServers)
 	kafkaConsumer, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":  bootstrapServers,
 		"group.id":           "file-processor-group",

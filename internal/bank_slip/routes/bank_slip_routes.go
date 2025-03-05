@@ -12,7 +12,7 @@ type BankSlipRoutes struct {
 func RegisterRoutes(r *httprouter.Router) {
 	factory := NewBankSlipFactory()
 
-	receiveUploadServiceFactory := factory.MakeReceiveUploadService()
+	receiveUploadServiceFactory := factory.MakeReceiveUploadController()
 
 	// Wrap all routes with CORS middleware
 	r.HandlerFunc(

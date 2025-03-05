@@ -56,12 +56,11 @@ func (s *ReceiveUploadService) Execute(file multipart.File, fileHeader *multipar
 
 	bankSlipFile := bankSlipEntities.NewBankSlipFileMetadata(fileHeader.Filename)
 
-	log.Printf("Receiving file... (id: %s)", bankSlipFile.ID)
-
 	err := s.bankSlipFileMetadataRepository.Insert(bankSlipFile)
 	if err != nil {
 		return err
 	}
+	log.Printf("Receiving file (id: %s)...", bankSlipFile.ID)
 
 	savedFile, err := s.fileHandler.SaveFile(handler.NewMultipartFile(file, fileHeader))
 	if err != nil {

@@ -7,8 +7,8 @@ build:
 	@echo "Building..."
 	
 	
-	@go build -o ./build/main cmd/api/main.go
-	@go build -o ./build/worker cmd/workers/main.go
+	@go build -o ./bin/main cmd/api/main.go
+	@go build -o ./bin/worker cmd/workers/main.go
 
 # Run the application
 run-api:

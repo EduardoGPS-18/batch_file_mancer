@@ -3,21 +3,45 @@ version: '3.4'
 services:
   file-processor:
     build: .
+    container_name: file-processor
+    command: ["dockerize", "-wait", "tcp://landoop-kafka:9092", "-timeout", "60s", "./main"]
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+    depends_on:
+      - database
+      - kafka
+
+  row-processor:
+    build: .
+    container_name: row-processor
+    command: ["dockerize", "-wait", "tcp://landoop-kafka:9092", "-timeout", "60s", "./worker"]
+    networks:
+      - app-network
+    depends_on:
+      - database
+      - kafka
 
   database:
     image: postgres:14
+    container_name: file-processor-db
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: fileprocessor
     ports:
       - "5432:5432"
+    expose:
+      - 5432
+    networks:
+      - app-network
       
   kafka:
     image: landoop/fast-data-dev:latest
     container_name: landoop-kafka
     environment:
-      ADV_HOST: "localhost"  # Define o host para acesso local
+      ADV_HOST: "landoop-kafka"  # Define o host para acesso local
       RUNTESTS: "0"          # Desativa os testes iniciais
       SAMPLEDATA: "0"        # Não gera dados de exemplo
       KAFKA_CREATE_TOPICS: "rows-to-process:1:1"
@@ -28,3 +52,13 @@ services:
       - "8082:8082"   # Kafka REST Proxy
       - "8083:8083"   # Kafka Connect REST API
       - "9092:9092"   # Kafka Broker
+    expose:
+      - 9092
+    networks:
+      - app-network
+
+
+
+networks:
+  app-network:
+    driver: bridge

@@ -33,5 +33,6 @@ main
 .DS_Store
 
 build/
+bin/
 
 uploads/
