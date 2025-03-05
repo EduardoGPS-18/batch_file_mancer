@@ -90,7 +90,13 @@ func (s *ReceiveUploadService) Execute(file multipart.File, fileHeader *multipar
 		return errors.New("header not found")
 	}
 
-	s.readFileContent(locallyFile, buffer, remainder, fileChannel, header)
+	s.readFileContentAndSendToProcess(
+		locallyFile,
+		buffer,
+		remainder,
+		fileChannel,
+		header,
+	)
 
 	close(fileChannel)
 
@@ -101,7 +107,7 @@ func (s *ReceiveUploadService) Execute(file multipart.File, fileHeader *multipar
 	return nil
 }
 
-func (*ReceiveUploadService) readFileContent(locallyFile io.Reader, buffer []byte, headerRemaining string, fileChannel chan Row, header string) {
+func (*ReceiveUploadService) readFileContentAndSendToProcess(locallyFile io.Reader, buffer []byte, headerRemaining string, fileChannel chan Row, header string) {
 	remainder := headerRemaining
 	for {
 		bytesRead, err := locallyFile.Read(buffer)

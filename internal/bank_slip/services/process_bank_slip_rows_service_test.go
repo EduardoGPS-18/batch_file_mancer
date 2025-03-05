@@ -217,13 +217,7 @@ func (s *TestSuit) TestProcessBankSlipRowsService_ShouldntCallGenerateBillingAnd
 		}
 		return exists && assert.Equal(s.T(), expected, actual)
 	}))
-	s.mockBankSlipProvider.AssertCalled(
-		s.T(),
-		"GenerateBillingAndSentEmail",
-		mock.MatchedBy(func(m *bankSlipEntities.BankSlipMap) bool {
-			return assert.Equal(s.T(), len(*m), 0)
-		}),
-	)
+	s.mockBankSlipProvider.AssertNotCalled(s.T(), "GenerateBillingAndSentEmail")
 	message.AssertCalled(s.T(), "Commit")
 }
 

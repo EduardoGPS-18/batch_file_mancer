@@ -50,6 +50,10 @@ func (f *BankSlipTestE2ESuite) SetupSuite() {
 	f.dbInstance = dbInstance
 }
 
+func (f *BankSlipTestE2ESuite) SetupTest() {
+	f.dbInstance.Exec(`truncate bank_slip_file cascade`)
+}
+
 func (f *BankSlipTestE2ESuite) TearDownTest() {
 	defer f.kafkaContainer.Terminate(f.T().Context())
 	defer f.dbContainer.Terminate(f.T().Context())
@@ -92,6 +96,7 @@ func (f *BankSlipTestE2ESuite) TestBankSlipE2eRunSuite_UploadFileAndProcessRows(
 	assert.Equal(f.T(), http.StatusOK, rr.Code)
 
 	retries := 0
+	found := false
 	for {
 		time.Sleep(3 * time.Second)
 		if retries == 10 {
@@ -102,7 +107,6 @@ func (f *BankSlipTestE2ESuite) TestBankSlipE2eRunSuite_UploadFileAndProcessRows(
 			f.T().Fatal(err)
 		}
 
-		found := false
 		for queryRes.Next() {
 			var name, governmentId, email, debtId string
 			var debtAmount float64

@@ -83,12 +83,18 @@ func (s *ProcessBankSlipRowsService) Execute(context context.Context, messagesCh
 				continue
 			}
 
+			if (len(bankSlips)) <= 0 {
+				log.Printf("No new debts inserted %s\n", fileId)
+				message.Commit()
+				continue
+			}
+
 			debitsWithErrors := s.generateBillingAndSentEmail.GenerateBillingAndSentEmail(&bankSlips)
 
 			err = s.bankSlipRepository.UpdateMany(&bankSlips, debitsWithErrors)
 
 			if err != nil {
-				log.Printf("Error inserting new debts (file id: %s): %v\n", fileId, err.Error())
+				log.Printf("Error updating new debts (file id: %s): %v\n", fileId, err.Error())
 				continue
 			}
 
