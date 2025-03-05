@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"os"
 
@@ -18,7 +17,6 @@ type KafkaProducerImpl struct {
 
 func NewKafkaProducer() *KafkaProducerImpl {
 	var bootstrapServers = os.Getenv("KAFKA_BOOTSTRAP_SERVERS")
-	fmt.Println("Kafka server: " + bootstrapServers)
 	p, err := kafka.NewProducer(&kafka.ConfigMap{
 		"bootstrap.servers": bootstrapServers,
 	})
