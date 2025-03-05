@@ -58,6 +58,7 @@ func (s *ReceiveUploadService) Execute(file multipart.File, fileHeader *multipar
 
 	err := s.bankSlipFileMetadataRepository.Insert(bankSlipFile)
 	if err != nil {
+		log.Println("Error inserting bank slip file metadata", err)
 		return err
 	}
 	log.Printf("Receiving file (id: %s)...", bankSlipFile.ID)

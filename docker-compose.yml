@@ -4,24 +4,24 @@ services:
   file-processor:
     build: .
     container_name: file-processor
-    command: ["dockerize", "-wait", "tcp://landoop-kafka:9092", "-timeout", "60s", "./main"]
+    command: ["dockerize", "-wait", "tcp://landoop-kafka-compose:9092", "-timeout", "60s", "./main"]
     ports:
       - "8080:8080"
     networks:
       - app-network
     depends_on:
       - database
-      - kafka
+      - kafka-compose
 
   row-processor:
     build: .
     container_name: row-processor
-    command: ["dockerize", "-wait", "tcp://landoop-kafka:9092", "-timeout", "60s", "./worker"]
+    command: ["dockerize", "-wait", "tcp://landoop-kafka-compose:9092", "-timeout", "60s", "./worker"]
     networks:
       - app-network
     depends_on:
       - database
-      - kafka
+      - kafka-compose
 
   database:
     image: postgres:14
@@ -37,11 +37,24 @@ services:
     networks:
       - app-network
       
-  kafka:
+  kafka-compose:
     image: landoop/fast-data-dev:latest
-    container_name: landoop-kafka
+    container_name: landoop-kafka-compose
     environment:
-      ADV_HOST: "landoop-kafka"  # Define o host para acesso local
+      ADV_HOST: "landoop-kafka-compose"  # Define o host para acesso local
+      RUNTESTS: "0"          # Desativa os testes iniciais
+      SAMPLEDATA: "0"        # Não gera dados de exemplo
+      KAFKA_CREATE_TOPICS: "rows-to-process:1:1"
+    expose:
+      - 9092
+    networks:
+      - app-network
+
+  kafka-local:
+    image: landoop/fast-data-dev:latest
+    container_name: landoop-kafka-local
+    environment:
+      ADV_HOST: "localhost"  # Define o host para acesso local
       RUNTESTS: "0"          # Desativa os testes iniciais
       SAMPLEDATA: "0"        # Não gera dados de exemplo
       KAFKA_CREATE_TOPICS: "rows-to-process:1:1"

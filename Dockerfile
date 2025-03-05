@@ -19,7 +19,7 @@ ENV DB_DATABASE="fileprocessor"
 ENV DB_PASSWORD="postgres"
 ENV DB_USERNAME="postgres"
 ENV DB_SCHEMA="public"
-ENV KAFKA_BOOTSTRAP_SERVERS="landoop-kafka:9092"
+ENV KAFKA_BOOTSTRAP_SERVERS="landoop-kafka-compose:9092"
 
 WORKDIR /root/
 
@@ -35,7 +35,6 @@ RUN apk add --no-cache libc6-compat
 RUN wget https://github.com/jwilder/dockerize/releases/download/v0.6.1/dockerize-linux-amd64-v0.6.1.tar.gz && \
   tar -xzvf dockerize-linux-amd64-v0.6.1.tar.gz && \
   mv dockerize /usr/local/bin/
-
 
 EXPOSE 8080
 # CMD in docker compose
