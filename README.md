@@ -60,8 +60,8 @@ $ cp .env.example .env.test
 
 Foram implementados três níveis de testes:
 
-1. **Unitários**: Testes unitários para as funções de processamento de arquivos.
-   1.1 Para executar, execute o comando:
+1.  **Unitários**: Testes unitários para as funções de processamento de arquivos.
+    1.1 Para executar, execute o comando:
 
 ```bash
 $ make test
