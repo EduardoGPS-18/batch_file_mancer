@@ -2,6 +2,7 @@ package integration
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	bankSlipEntities "performatic-file-processor/internal/bank_slip/entity"
 	bankSlipRepositories "performatic-file-processor/internal/bank_slip/repositories"
@@ -31,6 +32,7 @@ func (s *BankSlipTestIntegration) SetupSuite() {
 	if err != nil {
 		log.Fatalf("Error loading .env file")
 	}
+	fmt.Print("\nSetting up test suite...\n")
 
 	containerFactory := sharedTestHelpers.NewContainerFactory(s.T().Context())
 
@@ -44,7 +46,7 @@ func (s *BankSlipTestIntegration) SetupTest() {
 	s.db = db
 }
 
-func (s *BankSlipTestIntegration) TearDownTest() {
+func (s *BankSlipTestIntegration) TearDownSuite() {
 	defer s.postgresContainer.Terminate(s.T().Context())
 }
 
