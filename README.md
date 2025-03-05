@@ -43,6 +43,19 @@ $ curl --location 'http://<host (default: localhost)>:<port (default: 8080)/uplo
 
 ## Testes
 
+### Dependências
+
+1.  Configurar o arquivo `.env.test` a partir do `.env`.
+
+```
+$ cp .env.example .env.test
+```
+
+2. Para executar os testes de integração e e2e, é necessário algum gerenciador de container
+   2.1 Não é necessário subir os containers do projeto, pois os testes sobem os containers necessários (com testcontainers).
+
+### Execução
+
 Foram implementados três níveis de testes:
 
 1. **Unitários**: Testes unitários para as funções de processamento de arquivos.
@@ -60,7 +73,7 @@ $ make test
 $ make itest
 ```
 
-3. **E2E**: Testes de ponta a ponta todo o fluxo principal da aplicação.
+3. **E2E**: Testes de ponta a ponta todo o fluxo principal da aplicação (utilizando testcontainers).
    1.1 Depende do **banco de dados** e do **kafka**, para executar os testes e2e
    1.2 Para executar, execute o comando:
 
