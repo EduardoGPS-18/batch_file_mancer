@@ -54,30 +54,33 @@ $ cp .env.example .env.test
 ```
 
 2. Para executar os testes de integração e e2e, é necessário algum gerenciador de container
-   2.1 Não é necessário subir os containers do projeto, pois os testes sobem os containers necessários (com testcontainers).
+
+- 2.1 Não é necessário subir os containers do projeto, pois os testes sobem os containers necessários (com testcontainers).
 
 ### Execução
 
 Foram implementados três níveis de testes:
 
 1.  **Unitários**: Testes unitários para as funções de processamento de arquivos.
-    1.1 Para executar, execute o comando:
+
+- 1.1 Para executar, execute o comando:
 
 ```bash
 $ make test
 ```
 
 2. **Integração**: Testes de integração para teste das queries.
-   1.1 Depende do **banco de dados**, para executar os testes de integração
-   1.2 Para executar, execute o comando:
+
+- 1.1 Depende do **banco de dados**, para executar os testes de integração
+- 1.2 Para executar, execute o comando:
 
 ```bash
 $ make itest
 ```
 
 3. **E2E**: Testes de ponta a ponta todo o fluxo principal da aplicação (utilizando testcontainers).
-   1.1 Depende do **banco de dados** e do **kafka**, para executar os testes e2e
-   1.2 Para executar, execute o comando:
+   - 3.1 Depende do **banco de dados** e do **kafka**, para executar os testes e2e
+   - 3.2 Para executar, execute o comando:
 
 ```bash
 $ make etest
